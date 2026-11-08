@@ -921,12 +921,37 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
                   setPostUploading(false);
                 }}
               />
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                id="post-video-upload"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  if (file.type && !file.type.startsWith("video/") && !/\.(mp4|mov|m4v|webm)$/i.test(file.name)) { showToast("// NOT A VIDEO //"); return; }
+                  if (file.size > MAX_ATTACHMENT_BYTES) { showToast("// FILE TOO LARGE //"); return; }
+                  setPostUploading(true);
+                  const data = await uploadFile(file);
+                  if (data && data.url) setPostAttach(packAttachment(file, data.url));
+                  else showToast(data?.error || "// UPLOAD FAILED //");
+                  setPostUploading(false);
+                }}
+              />
               <label
                 htmlFor="post-image-upload"
-                className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider border rounded-sm transition-all flex items-center gap-1 cursor-pointer"
-                style={{ borderColor: postAttach ? "hsl(var(--primary))" : "hsl(var(--border))", color: postAttach ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}
+                className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider border rounded-sm cursor-pointer"
+                style={{ borderColor: postAttach && !postAttach.startsWith("[video:") ? "hsl(var(--primary))" : "hsl(var(--border))", color: postAttach && !postAttach.startsWith("[video:") ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}
               >
-                {postUploading ? "..." : postAttach ? "FILE+" : "FILE"}
+                FILE
+              </label>
+              <label
+                htmlFor="post-video-upload"
+                className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider border rounded-sm cursor-pointer"
+                style={{ borderColor: postAttach?.startsWith("[video:") ? "hsl(var(--primary))" : "hsl(var(--border))", color: postAttach?.startsWith("[video:") ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}
+              >
+                {postUploading && postAttach?.startsWith("[video:") ? "..." : "VIDEO"}
               </label>
             </div>
             <button

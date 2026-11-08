@@ -590,7 +590,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       const file = body.get("file");
       if (file instanceof File) {
         try {
-          const id = await storeVaultFile(await file.arrayBuffer(), file.type || "application/octet-stream");
+          const id = await storeVaultFile(await file.arrayBuffer(), file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.(mp4|m4v)$/i.test(file.name) ? "video/mp4" : /\.webm$/i.test(file.name) ? "video/webm" : "application/octet-stream"));
           return json({ url: "vault:" + id, name: file.name });
         } catch (err) {
           const message = err instanceof Error ? err.message : "Upload failed";
