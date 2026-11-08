@@ -9,62 +9,63 @@
 <p align="center">
   <a href="https://synchancybersecurity.github.io/Omerta/"><img src="https://img.shields.io/badge/Open%20the%20vault-B91C1C?style=for-the-badge&labelColor=0A0A0A&color=B91C1C" alt="Open the vault"></a>
   &nbsp;
-  <img src="https://img.shields.io/badge/Pit%20black-0A0A0A?style=for-the-badge&labelColor=0A0A0A&color=0A0A0A" alt="Pit black">
+  <img src="https://img.shields.io/badge/AES%20sealed-B91C1C?style=for-the-badge&labelColor=0A0A0A&color=B91C1C" alt="AES sealed">
   &nbsp;
-  <img src="https://img.shields.io/badge/Blood-B91C1C?style=for-the-badge&labelColor=0A0A0A&color=B91C1C" alt="Blood">
-  &nbsp;
-  <img src="https://img.shields.io/badge/Bone-F0EBE6?style=for-the-badge&labelColor=0A0A0A&color=F0EBE6" alt="Bone">
+  <img src="https://img.shields.io/badge/Home%20screen%20app-F0EBE6?style=for-the-badge&labelColor=0A0A0A&color=F0EBE6" alt="Home screen app">
 </p>
 
 # Omertà
 
-Omertà is a private room for people who would rather speak in handles than in real names. You open it in the browser, you keep a passphrase, and the messages stay on that phone or computer. The vault on the device is sealed with AES. Nobody else is sitting on a server reading the room.
+Omertà is a private communications app for people who use a handle instead of a real name. It runs in the browser. Messages remain on the device. The stored vault is sealed with AES.
 
-The live app is here: [synchancybersecurity.github.io/Omerta](https://synchancybersecurity.github.io/Omerta/)
+**Live app:** [synchancybersecurity.github.io/Omerta](https://synchancybersecurity.github.io/Omerta/)
 
-## What you can do
+## Overview
 
-You pick a handle and a passphrase. If that pair is new, the vault makes the account. If you have used it on this device before, the same pair lets you back in.
+Each person signs in with a handle and a passphrase. A new pair creates an account on that device. The same pair opens it again later. Capitalization of the handle does not matter.
 
-Inside, you get a profile, a news feed, private chat, a message box, contacts, a small escrow desk, and settings. New messages show up while you stay on the tab. You do not have to leave and come back.
+The app includes a profile, a news feed, private messages, contacts, chat rooms, an escrow desk, and settings. New messages appear while you remain on the current screen.
 
-The Lounge is open to every handle. You can also make your own room, and you can lock it with a passphrase so only the people who know it can walk in. The person who made the room can always return. Every room, locked or not, clears itself every 48 hours. Private messages are left alone.
+## Chat rooms
 
-Posts can be plain, burned after reading, or wrapped in the emoji cipher. The coin on the login screen is the mark of the house.
+The Lounge is open to every handle on the device. Any member may create an additional room. A room may be locked with a passphrase. The creator can always reenter a locked room. Other members need the passphrase.
 
-## Put it on your phone
+All chat rooms, including locked rooms, are cleared every 48 hours. Private messages are not included in that clear.
 
-The site is already a home screen app.
+Posts may be plain text, set to burn after reading, or wrapped in the emoji cipher.
 
-On an iPhone, open the link in Safari. Tap Share, then Add to Home Screen. The icon is the coin, and the name is Omertà.
+## Install
 
-On Android, open the link in Chrome. Use the browser menu and choose Add to Home screen, or Install app.
+Omertà can be added to a phone home screen.
 
-After that, launch it from the icon like any other app. If a change does not show up, close the app all the way and open it again.
+| Platform | Steps |
+|---|---|
+| iPhone | Open the link in Safari. Tap Share, then Add to Home Screen. |
+| Android | Open the link in Chrome. Use the browser menu, then Add to Home screen or Install app. |
 
-## Sign in
+The icon is the coin. The name is Omertà. After an update, close the app completely and open it again.
 
-Type the handle and the passphrase you used the first time on that device. Capital letters in the handle do not matter.
+## Accounts and data
 
-If the passphrase does not match what this phone saved, the screen says so. It will not pretend you are trying to create a second account.
+Sign in with the handle and passphrase saved on that device. If the passphrase does not match, the screen reports that directly. It does not treat the attempt as a new account.
 
-This copy of the vault lives in the browser. It is not the old machine in the back room. A passphrase that only ever lived on that machine will not open the phone. Two different phones do not share one room.
+The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one.
 
-## Run it yourself
-
-If you want the same app on your own computer:
+## Local development
 
 ```bash
 npm install
 npm run dev
 ```
 
-The pages build, the one GitHub publishes, is:
+The build published to GitHub Pages:
 
 ```bash
 npm run build:pages
 ```
 
-## The old server
+## Legacy server
 
-The original Express program is kept in the `original` folder, including the database layer, Docker, and the Termux notes. That database is sealed with AES as well. The key stays on the machine that runs it, not in this repository. GitHub Pages cannot keep that process running. It only serves the browser app. If you start the old server yourself, do it on a machine you control, and do not leave a shell open to the internet.
+The original Express program is preserved in the `original` folder, including the database layer, Docker, and the Termux notes. Its database is also sealed with AES. The key remains on the machine that runs the server and is not stored in this repository.
+
+GitHub Pages serves the browser app only. It does not keep that process running. If you start the legacy server, run it on a machine you control and do not expose the shell to the public internet.
