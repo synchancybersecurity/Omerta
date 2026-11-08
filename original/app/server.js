@@ -1,13 +1,16 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const { WebSocketServer } = require('ws');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
-const multer = require('multer');
-const { exec } = require('child_process');
-const db = require('./db.js');
+import 'dotenv/config';
+import express from 'express';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
+import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
+import * as db from './db.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const server = http.createServer(app);

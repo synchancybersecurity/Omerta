@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const DB_PATH = './omerta.json';
 
-function loadDb() {
+export function loadDb() {
   if (!existsSync(DB_PATH)) return { users: [], conversations: [], messages: [], openChatMessages: [], posts: [], smsMessages: [], userSettings: {}, escrows: [], chatRooms: [], roomMessages: [] };
   const data = JSON.parse(readFileSync(DB_PATH, 'utf8'));
   if (!data.smsMessages) data.smsMessages = [];
@@ -14,7 +14,7 @@ function loadDb() {
   return data;
 }
 
-function saveDb(db) {
+export function saveDb(db) {
   writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
@@ -42,17 +42,17 @@ for (const post of db.posts) {
 }
 
 // ===== USERS =====
-function createUser(handle, passphrase) {
+export function createUser(handle, passphrase) {
   if (db.users.find(u => u.handle === handle)) return null;
   const user = { id: Date.now(), handle, passphrase, role: 'basic', created_at: Math.floor(Date.now()/1000) };
   db.users.push(user); saveDb(db); return user;
 }
 
-function verifyUser(handle, passphrase) {
+export function verifyUser(handle, passphrase) {
   return db.users.find(u => u.handle === handle && u.passphrase === passphrase) || null;
 }
 
-function promoteUser(handle, role) {
+export function promoteUser(handle, role) {
   const user = db.users.find(u => u.handle === handle);
   if (!user) return null;
   user.role = role;
@@ -60,13 +60,13 @@ function promoteUser(handle, role) {
   return user;
 }
 
-function getUserRole(handle) {
+export function getUserRole(handle) {
   const user = db.users.find(u => u.handle === handle);
   return user?.role || 'basic';
 }
 
 // ===== CONVERSATIONS =====
-function getOrCreateConversation(user1, user2) {
+export function getOrCreateConversation(user1, user2) {
   const [a, b] = [user1, user2].sort();
   let conv = db.conversations.find(c => c.user1_handle === a && c.user2_handle === b);
   if (!conv) {
@@ -76,7 +76,7 @@ function getOrCreateConversation(user1, user2) {
   return conv;
 }
 
-function getConversationsForUser(handle) {
+export function getConversationsForUser(handle) {
   return db.conversations
     .filter(c => c.user1_handle === handle || c.user2_handle === handle)
     .map(c => {
@@ -88,60 +88,60 @@ function getConversationsForUser(handle) {
 }
 
 // ===== MESSAGES =====
-function sendMessage(conversationId, sender, content, burnAfterRead = 0, emojiEncrypted = 0, e2eEncrypted = 0, replyTo = null, replyContent = null, replySender = null) {
+export function sendMessage(conversationId, sender, content, burnAfterRead = 0, emojiEncrypted = 0, e2eEncrypted = 0, replyTo = null, replyContent = null, replySender = null) {
   const msg = { id: Date.now(), conversation_id: Number(conversationId), sender_handle: sender, content, timestamp: Date.now(), burn_after_read: burnAfterRead ? 1 : 0, is_burned: 0, emoji_encrypted: emojiEncrypted ? 1 : 0, e2e_encrypted: e2eEncrypted ? 1 : 0, reply_to: replyTo, reply_content: replyContent, reply_sender: replySender };
   db.messages.push(msg); saveDb(db); return msg;
 }
 
-function getMessagesForConversation(conversationId) {
+export function getMessagesForConversation(conversationId) {
   return db.messages.filter(m => m.conversation_id === Number(conversationId)).sort((a,b) => a.timestamp - b.timestamp);
 }
 
-function burnMessage(messageId) {
+export function burnMessage(messageId) {
   const msg = db.messages.find(m => m.id === Number(messageId));
   if (msg) { msg.is_burned = 1; msg.content = '// BURNED //'; saveDb(db); }
 }
 
-function editMessage(messageId, newContent) {
+export function editMessage(messageId, newContent) {
   const msg = db.messages.find(m => m.id === Number(messageId));
   if (msg) { msg.content = newContent; msg.edited = 1; saveDb(db); return msg; }
   return null;
 }
 
-function deleteMessage(messageId) {
+export function deleteMessage(messageId) {
   const msg = db.messages.find(m => m.id === Number(messageId));
   if (msg) { msg.deleted = 1; msg.content = '// DELETED //'; saveDb(db); return msg; }
   return null;
 }
 
-function replyToMessage(conversationId, sender, content, replyToId, emojiEncrypted = 0, e2eEncrypted = 0) {
+export function replyToMessage(conversationId, sender, content, replyToId, emojiEncrypted = 0, e2eEncrypted = 0) {
   const msg = { id: Date.now(), conversation_id: Number(conversationId), sender_handle: sender, content, timestamp: Date.now(), burn_after_read: 0, is_burned: 0, emoji_encrypted: emojiEncrypted ? 1 : 0, e2e_encrypted: e2eEncrypted ? 1 : 0, reply_to: Number(replyToId) };
   db.messages.push(msg); saveDb(db); return msg;
 }
 
 // ===== OPEN CHAT =====
-function sendOpenChatMessage(sender, content, emojiEncrypted = 0, e2eEncrypted = 0, replyTo = null, replyContent = null, replySender = null) {
+export function sendOpenChatMessage(sender, content, emojiEncrypted = 0, e2eEncrypted = 0, replyTo = null, replyContent = null, replySender = null) {
   const msg = { id: Date.now(), sender_handle: sender, content, timestamp: Date.now(), emoji_encrypted: emojiEncrypted ? 1 : 0, e2e_encrypted: e2eEncrypted ? 1 : 0, reply_to: replyTo, reply_content: replyContent, reply_sender: replySender };
   db.openChatMessages.push(msg); saveDb(db); return msg;
 }
 
-function getOpenChatMessages() {
+export function getOpenChatMessages() {
   return db.openChatMessages.slice(-100);
 }
 
-function editOpenChatMessage(messageId, newContent) {
+export function editOpenChatMessage(messageId, newContent) {
   const msg = db.openChatMessages.find(m => m.id === Number(messageId));
   if (msg) { msg.content = newContent; msg.edited = 1; saveDb(db); return msg; }
   return null;
 }
 
-function deleteOpenChatMessage(messageId) {
+export function deleteOpenChatMessage(messageId) {
   const msg = db.openChatMessages.find(m => m.id === Number(messageId));
   if (msg) { msg.deleted = 1; msg.content = '// DELETED //'; saveDb(db); return msg; }
   return null;
 }
 
-function clearOpenChatMessages() {
+export function clearOpenChatMessages() {
   const count = db.openChatMessages.length;
   db.openChatMessages = [];
   saveDb(db);
@@ -149,11 +149,11 @@ function clearOpenChatMessages() {
 }
 
 // ===== USERS SEARCH =====
-function getAllUsers() {
+export function getAllUsers() {
   return db.users.map(u => ({ id: u.id, handle: u.handle, role: u.role || 'basic', created_at: u.created_at }));
 }
 
-function searchUsers(query) {
+export function searchUsers(query) {
   const q = query.toLowerCase();
   return db.users
     .filter(u => u.handle.toLowerCase().includes(q))
@@ -162,37 +162,37 @@ function searchUsers(query) {
 }
 
 // ===== SMS =====
-function sendSMS(sender, recipient, content, burnAfterRead = 0) {
+export function sendSMS(sender, recipient, content, burnAfterRead = 0) {
   const msg = { id: Date.now(), sender_handle: sender, recipient, content, timestamp: Date.now(), burn_after_read: burnAfterRead ? 1 : 0, is_burned: 0 };
   db.smsMessages.push(msg);
   saveDb(db);
   return msg;
 }
 
-function getSMS(handle) {
+export function getSMS(handle) {
   return db.smsMessages
     .filter(m => m.sender_handle === handle || m.recipient === handle)
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, 200);
 }
 
-function burnSMS(messageId) {
+export function burnSMS(messageId) {
   const msg = db.smsMessages.find(m => m.id === Number(messageId));
   if (msg) { msg.is_burned = 1; msg.content = '// BURNED //'; saveDb(db); }
 }
 
 // ===== USER SETTINGS =====
-function saveUserSettings(handle, settings) {
+export function saveUserSettings(handle, settings) {
   if (!db.userSettings) db.userSettings = {};
   db.userSettings[handle] = { ...db.userSettings[handle], ...settings, updated_at: Date.now() };
   saveDb(db);
 }
 
-function getUserSettings(handle) {
+export function getUserSettings(handle) {
   return db.userSettings?.[handle] || null;
 }
 
-function getUserProfile(handle) {
+export function getUserProfile(handle) {
   const user = db.users.find(u => u.handle === handle);
   if (!user) return null;
   const settings = db.userSettings?.[handle] || {};
@@ -208,11 +208,11 @@ function getUserProfile(handle) {
 }
 
 // ===== HOUSE ESCROW SETTINGS =====
-function getHouseSettings() {
+export function getHouseSettings() {
   return db.houseSettings || { holdingWallet: '', feeWallet: '', houseFeePercent: 2.25 };
 }
 
-function saveHouseSettings(settings) {
+export function saveHouseSettings(settings) {
   db.houseSettings = { ...db.houseSettings, ...settings, updated_at: Date.now() };
   saveDb(db);
 }
@@ -220,11 +220,11 @@ function saveHouseSettings(settings) {
 // ===== ESCROW =====
 const ROOM_LIMITS = { admin: Infinity, moderator: 3, basic: 1 };
 
-function countRoomsByCreator(creatorHandle) {
+export function countRoomsByCreator(creatorHandle) {
   return (db.chatRooms || []).filter(r => r.creator_handle === creatorHandle).length;
 }
 
-function createEscrow(sender, recipient, amount, description) {
+export function createEscrow(sender, recipient, amount, description) {
   if (!db.escrows) db.escrows = [];
   const houseFeePercent = db.houseSettings?.houseFeePercent || 2.25;
   const houseFee = Number((Number(amount) * (houseFeePercent / 100)).toFixed(2));
@@ -247,21 +247,21 @@ function createEscrow(sender, recipient, amount, description) {
   db.escrows.push(escrow); saveDb(db); return escrow;
 }
 
-function getAllEscrows() {
+export function getAllEscrows() {
   return (db.escrows || []).sort((a, b) => b.created_at - a.created_at);
 }
 
-function getEscrowsForHandle(handle) {
+export function getEscrowsForHandle(handle) {
   return (db.escrows || []).filter(e => e.sender === handle || e.recipient === handle).sort((a, b) => b.created_at - a.created_at);
 }
 
-function updateEscrowStatus(id, status) {
+export function updateEscrowStatus(id, status) {
   const escrow = (db.escrows || []).find(e => e.id === id);
   if (escrow) { escrow.status = status; saveDb(db); return escrow; }
   return null;
 }
 
-function resolveEscrow(id, resolution, adminHandle, note) {
+export function resolveEscrow(id, resolution, adminHandle, note) {
   const escrow = (db.escrows || []).find(e => e.id === id);
   if (!escrow) return null;
   escrow.status = resolution;
@@ -273,7 +273,7 @@ function resolveEscrow(id, resolution, adminHandle, note) {
 }
 
 // ===== POSTS =====
-function createPost(author, authorHandle, content, emojiEncrypted = 0, burnAfter = 0, authorAvatar = null) {
+export function createPost(author, authorHandle, content, emojiEncrypted = 0, burnAfter = 0, authorAvatar = null) {
   const post = { id: 'p' + Date.now(), author, author_handle: authorHandle, author_avatar: authorAvatar, content, emoji_encrypted: emojiEncrypted ? 1 : 0, timestamp: Date.now(), likes: 0, dislikes: 0, comments: 0, shares: 0, is_burned: 0, burn_after: burnAfter ? 1 : 0, replies: [], liked_by: [], disliked_by: [] };
   db.posts.push(post); saveDb(db);
   // Also save avatar to userSettings for profile lookups in chat
@@ -283,20 +283,20 @@ function createPost(author, authorHandle, content, emojiEncrypted = 0, burnAfter
   return post;
 }
 
-function getPosts() {
+export function getPosts() {
   return db.posts
     .filter(p => !p.is_burned)
     .map(p => ({ ...p, comments: (p.replies || []).length, likes: (p.liked_by || []).length, dislikes: (p.disliked_by || []).length }))
     .sort((a, b) => b.timestamp - a.timestamp);
 }
 
-function deletePost(postId) {
+export function deletePost(postId) {
   const post = db.posts.find(p => p.id === postId);
   if (post) { post.is_burned = 1; saveDb(db); return true; }
   return false;
 }
 
-function updatePost(postId, updates) {
+export function updatePost(postId, updates) {
   const post = db.posts.find(p => p.id === postId);
   if (!post) return null;
   if (updates.content !== undefined) post.content = updates.content;
@@ -306,7 +306,7 @@ function updatePost(postId, updates) {
   return post;
 }
 
-function likePost(postId, userHandle) {
+export function likePost(postId, userHandle) {
   const post = db.posts.find(p => p.id === postId);
   if (!post) return null;
   if (!post.liked_by) post.liked_by = [];
@@ -317,7 +317,7 @@ function likePost(postId, userHandle) {
   return { likes: post.liked_by.length, dislikes: post.disliked_by.length, liked_by: post.liked_by, disliked_by: post.disliked_by };
 }
 
-function dislikePost(postId, userHandle) {
+export function dislikePost(postId, userHandle) {
   const post = db.posts.find(p => p.id === postId);
   if (!post) return null;
   if (!post.liked_by) post.liked_by = [];
@@ -328,7 +328,7 @@ function dislikePost(postId, userHandle) {
   return { likes: post.liked_by.length, dislikes: post.disliked_by.length, liked_by: post.liked_by, disliked_by: post.disliked_by };
 }
 
-function sharePost(postId) {
+export function sharePost(postId) {
   const post = db.posts.find(p => p.id === postId);
   if (!post) return null;
   post.shares = (post.shares || 0) + 1;
@@ -336,7 +336,7 @@ function sharePost(postId) {
   return { shares: post.shares };
 }
 
-function createReply(postId, author, content) {
+export function createReply(postId, author, content) {
   const post = db.posts.find(p => p.id === postId);
   if (!post) return null;
   if (!post.replies) post.replies = [];
@@ -346,12 +346,12 @@ function createReply(postId, author, content) {
   return reply;
 }
 
-function getRepliesForPost(postId) {
+export function getRepliesForPost(postId) {
   const post = db.posts.find(p => p.id === postId);
   return post?.replies || [];
 }
 
-function searchMessages(handle, query) {
+export function searchMessages(handle, query) {
   const q = query.toLowerCase();
   const results = [];
   const userConvos = (db.conversations || []).filter(c => c.user1_handle === handle || c.user2_handle === handle);
@@ -366,7 +366,7 @@ function searchMessages(handle, query) {
 }
 
 // ===== CHAT ROOMS =====
-function createChatRoom(name, creatorHandle, role, isLocked, password) {
+export function createChatRoom(name, creatorHandle, role, isLocked, password) {
   if (!db.chatRooms) db.chatRooms = [];
   const limit = ROOM_LIMITS[role] || ROOM_LIMITS.basic;
   const count = countRoomsByCreator(creatorHandle);
@@ -387,19 +387,19 @@ function createChatRoom(name, creatorHandle, role, isLocked, password) {
   return room;
 }
 
-function getChatRooms() {
+export function getChatRooms() {
   return (db.chatRooms || []).sort((a, b) => b.created_at - a.created_at);
 }
 
-function getChatRoomById(roomId) {
+export function getChatRoomById(roomId) {
   return (db.chatRooms || []).find(r => r.id === roomId) || null;
 }
 
-function getChatRoomByCreator(creatorHandle) {
+export function getChatRoomByCreator(creatorHandle) {
   return (db.chatRooms || []).find(r => r.creator_handle === creatorHandle) || null;
 }
 
-function deleteChatRoom(roomId) {
+export function deleteChatRoom(roomId) {
   const idx = (db.chatRooms || []).findIndex(r => r.id === roomId);
   if (idx !== -1) {
     db.chatRooms.splice(idx, 1);
@@ -410,7 +410,7 @@ function deleteChatRoom(roomId) {
   return false;
 }
 
-function lockChatRoom(roomId, lockedBy, reason) {
+export function lockChatRoom(roomId, lockedBy, reason) {
   const room = getChatRoomById(roomId);
   if (!room) return null;
   room.is_locked = 1;
@@ -420,7 +420,7 @@ function lockChatRoom(roomId, lockedBy, reason) {
   return room;
 }
 
-function unlockChatRoom(roomId) {
+export function unlockChatRoom(roomId) {
   const room = getChatRoomById(roomId);
   if (!room) return null;
   room.is_locked = 0;
@@ -430,7 +430,7 @@ function unlockChatRoom(roomId) {
   return room;
 }
 
-function canBypassLock(roomId, userRole) {
+export function canBypassLock(roomId, userRole) {
   const room = getChatRoomById(roomId);
   if (!room) return false;
   if (!room.is_locked) return true;
@@ -439,14 +439,14 @@ function canBypassLock(roomId, userRole) {
   return false;
 }
 
-function verifyRoomPassword(roomId, password) {
+export function verifyRoomPassword(roomId, password) {
   const room = getChatRoomById(roomId);
   if (!room) return false;
   if (!room.is_locked) return true;
   return room.password === password;
 }
 
-function sendRoomMessage(roomId, sender, content, emojiEncrypted, e2eEncrypted, replyTo, replyContent, replySender) {
+export function sendRoomMessage(roomId, sender, content, emojiEncrypted, e2eEncrypted, replyTo, replyContent, replySender) {
   if (!db.roomMessages) db.roomMessages = [];
   const msg = {
     id: Date.now(),
@@ -465,10 +465,9 @@ function sendRoomMessage(roomId, sender, content, emojiEncrypted, e2eEncrypted, 
   return msg;
 }
 
-function getRoomMessages(roomId) {
+export function getRoomMessages(roomId) {
   return (db.roomMessages || [])
     .filter(m => m.room_id === roomId)
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-module.exports = { loadDb, saveDb, createUser, verifyUser, promoteUser, getUserRole, getOrCreateConversation, getConversationsForUser, sendMessage, getMessagesForConversation, burnMessage, editMessage, deleteMessage, replyToMessage, sendOpenChatMessage, getOpenChatMessages, editOpenChatMessage, deleteOpenChatMessage, clearOpenChatMessages, getAllUsers, searchUsers, sendSMS, getSMS, burnSMS, saveUserSettings, getUserSettings, getUserProfile, getHouseSettings, saveHouseSettings, countRoomsByCreator, createEscrow, getAllEscrows, getEscrowsForHandle, updateEscrowStatus, resolveEscrow, createPost, getPosts, deletePost, updatePost, likePost, dislikePost, sharePost, createReply, getRepliesForPost, searchMessages, createChatRoom, getChatRooms, getChatRoomById, getChatRoomByCreator, deleteChatRoom, lockChatRoom, unlockChatRoom, canBypassLock, verifyRoomPassword, sendRoomMessage, getRoomMessages };
