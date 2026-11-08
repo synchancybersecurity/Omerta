@@ -122,8 +122,8 @@ interface ApiContextValue {
   createReply: (postId: string, author: string, content: string) => Promise<void>;
   userProfiles: Record<string, UserProfile>;
   fetchUserProfile: (handle: string) => Promise<UserProfile | null>;
-  auth: (handle: string, passphrase: string) => Promise<{ success: boolean; error?: string; role?: string; handle?: string }>;
-  register: (handle: string, passphrase: string) => Promise<{ success: boolean; error?: string; role?: string; handle?: string }>;
+  auth: (handle: string, passphrase: string) => Promise<{ success: boolean; error?: string; code?: string; role?: string; handle?: string }>;
+  register: (handle: string, passphrase: string) => Promise<{ success: boolean; error?: string; code?: string; role?: string; handle?: string }>;
   activeConversationId: number | null;
   setActiveConversationId: (id: number | null) => void;
   connectWs: () => void;
@@ -170,7 +170,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ handle, passphrase })
       });
       const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error || 'Login failed' };
+      if (!res.ok) return { success: false, error: data.error || 'Login failed', code: data.code };
       return { success: true, role: data.role || 'basic', handle: data.handle };
     } catch {
       return { success: false, error: 'Network error' };
@@ -185,7 +185,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ handle, passphrase })
       });
       const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error || 'Registration failed' };
+      if (!res.ok) return { success: false, error: data.error || 'Registration failed', code: data.code };
       return { success: true, role: data.role || 'basic', handle: data.handle };
     } catch {
       return { success: false, error: 'Network error' };

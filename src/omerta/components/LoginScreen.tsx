@@ -40,25 +40,33 @@ export default function LoginScreen() {
     return () => clearTimeout(t);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!handle.trim()) return;
+    const data = new FormData(e.currentTarget);
+    const handleValue = String(data.get("handle") || handle).trim();
+    const passValue = String(data.get("passphrase") ?? passphrase).trim();
+    if (!handleValue || !passValue) {
+      setLoginError("Handle and passphrase required");
+      return;
+    }
     setIsSubmitting(true);
-    setLoginError('');
+    setLoginError("");
 
-    // Try to authenticate via API first
-    const result = await auth(handle.trim(), passphrase);
+    const result = await auth(handleValue, passValue);
     if (result.success) {
-      if (result.role) setUserRole(result.role as 'basic' | 'moderator' | 'admin');
-      login(handle.trim());
+      if (result.role) setUserRole(result.role as "basic" | "moderator" | "admin");
+      login(result.handle || handleValue);
+    } else if (result.code === "bad_passphrase") {
+      setLoginError("Wrong passphrase");
     } else {
-      // If auth fails (user doesn't exist), auto-register
-      const regResult = await register(handle.trim(), passphrase);
+      const regResult = await register(handleValue, passValue);
       if (regResult.success) {
-        if (regResult.role) setUserRole(regResult.role as 'basic' | 'moderator' | 'admin');
-        login(handle.trim());
+        if (regResult.role) setUserRole(regResult.role as "basic" | "moderator" | "admin");
+        login(regResult.handle || handleValue);
+      } else if (regResult.code === "bad_passphrase") {
+        setLoginError("Wrong passphrase");
       } else {
-        setLoginError(regResult.error || 'Authentication failed');
+        setLoginError(regResult.error || "Authentication failed");
       }
     }
     setIsSubmitting(false);
@@ -120,10 +128,12 @@ export default function LoginScreen() {
                 Anonymous Handle
               </label>
               <input
+                name="handle"
                 type="text"
                 value={handle}
                 onChange={(e) => setHandle(e.target.value)}
                 placeholder="Enter your handle..."
+                autoComplete="username"
                 className="w-full rounded-sm px-4 py-3 font-mono text-sm focus:outline-none transition-colors"
                 style={{
                   background: 'hsl(var(--input))',
@@ -138,10 +148,12 @@ export default function LoginScreen() {
                 Passphrase
               </label>
               <input
+                name="passphrase"
                 type="password"
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
                 placeholder="****************"
+                autoComplete="current-password"
                 className="w-full rounded-sm px-4 py-3 font-mono text-sm focus:outline-none transition-colors"
                 style={{
                   background: 'hsl(var(--input))',

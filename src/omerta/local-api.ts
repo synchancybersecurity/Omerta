@@ -211,17 +211,24 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   const seg = parts.slice(1);
 
   if (seg[0] === "auth" && seg[1] === "login" && method === "POST") {
-    const { handle, passphrase } = await readJson(input, init);
-    const user = db.users.find((u) => u.handle === handle && u.passphrase === passphrase);
-    if (!user) return json({ error: "Invalid credentials" }, 401);
+    const body = await readJson(input, init);
+    const handle = String(body.handle || "").trim();
+    const passphrase = String(body.passphrase || "").trim();
+    const user = db.users.find((u) => u.handle.toLowerCase() === handle.toLowerCase());
+    if (!user) return json({ error: "No such handle", code: "unknown" }, 401);
+    if (user.passphrase !== passphrase) return json({ error: "Wrong passphrase", code: "bad_passphrase" }, 401);
     return json({ success: true, handle: user.handle, role: user.role || "basic" });
   }
 
   if (seg[0] === "auth" && seg[1] === "register" && method === "POST") {
-    const { handle, passphrase } = await readJson(input, init);
+    const body = await readJson(input, init);
+    const handle = String(body.handle || "").trim();
+    const passphrase = String(body.passphrase || "").trim();
     if (!handle || !passphrase) return json({ error: "Missing fields" }, 400);
-    if (db.users.some((u) => u.handle === handle)) return json({ error: "Handle already exists" }, 409);
-    const role = String(handle).toLowerCase() === "flint" ? "admin" : "basic";
+    if (db.users.some((u) => u.handle.toLowerCase() === handle.toLowerCase())) {
+      return json({ error: "Wrong passphrase", code: "bad_passphrase" }, 401);
+    }
+    const role = handle.toLowerCase() === "flint" ? "admin" : "basic";
     const user: User = { id: nid(), handle, passphrase, role, created_at: Math.floor(Date.now() / 1000) };
     db.users.push(user);
     save();
