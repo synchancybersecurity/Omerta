@@ -1,6 +1,6 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
-import { isEvmAddress } from "@omerta/chain";
+import { createHouseWallet, exportHouseUsdc, isEvmAddress } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
 
@@ -66,6 +66,8 @@ type Db = {
   houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number; chain: string };
   houseDeposits: HouseDeposit[];
   chainPayments: ChainPayment[];
+  houseWallet: { address: string; key: string } | null;
+  payoutWallets: string[];
   publicKeys: Record<string, string>;
   listings: Listing[];
 };
@@ -115,6 +117,7 @@ const ROOM_CLEAR_MS = 48 * 60 * 60 * 1000;
 const HOUSE_CUT = 0.03;
 
 function creditHouse(source: "auction" | "escrow", sourceId: string, gross: number, payer = "") {
+  ensureHouseWallet();
   if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
   if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
   const existing = db.houseDeposits.find((row) => row.source === source && row.source_id === sourceId);
@@ -149,10 +152,41 @@ function creditHouse(source: "auction" | "escrow", sourceId: string, gross: numb
   return amount;
 }
 
-function sweepHouseWallet(wallet: string) {
-  for (const row of db.houseDeposits || []) {
-    if (!row.wallet) row.wallet = wallet;
+function ensureHouseWallet() {
+  const previous = (db.houseSettings?.feeWallet || "").trim();
+  if (!db.houseWallet?.address || !db.houseWallet?.key) {
+    db.houseWallet = createHouseWallet();
   }
+  if (!Array.isArray(db.payoutWallets)) db.payoutWallets = [];
+  if (isEvmAddress(previous) && previous.toLowerCase() !== db.houseWallet.address.toLowerCase()) {
+    if (!db.payoutWallets.some((item) => item.toLowerCase() === previous.toLowerCase())) db.payoutWallets.push(previous);
+  }
+  db.houseSettings.feeWallet = db.houseWallet.address;
+  db.houseSettings.holdingWallet = db.houseWallet.address;
+  for (const row of db.chainPayments || []) {
+    if (row.status === "pending") row.wallet = db.houseWallet.address;
+  }
+  return db.houseWallet;
+}
+
+function isHouseAdmin(handle: string) {
+  const name = handle.trim().toLowerCase();
+  if (!name) return false;
+  if (name === "flint") return true;
+  const user = db.users.find((item) => item.handle.toLowerCase() === name);
+  return (user?.role || "") === "admin";
+}
+
+function publicHouse() {
+  const wallet = ensureHouseWallet();
+  return {
+    ...db.houseSettings,
+    feeWallet: wallet.address,
+    houseAddress: wallet.address,
+    payouts: db.payoutWallets || [],
+    deposits: db.houseDeposits || [],
+    payments: db.chainPayments || [],
+  };
 }
 
 function highBid(lot: Listing) {
@@ -259,6 +293,8 @@ function emptyDb(): Db {
     houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3, chain: "base" },
     houseDeposits: [],
     chainPayments: [],
+    houseWallet: null,
+    payoutWallets: [],
     publicKeys: {},
     listings: [],
   };
@@ -294,8 +330,11 @@ async function loadAsync() {
       db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: db.houseSettings?.chain || "base" };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
+      if (!Array.isArray(db.payoutWallets)) db.payoutWallets = [];
+      const hadKey = Boolean(db.houseWallet?.key);
+      ensureHouseWallet();
       const stripped = stripDemo();
-      if (!isSealed(raw) || stripped) {
+      if (!isSealed(raw) || stripped || !hadKey) {
         lastSaved = "";
         save();
       } else {
@@ -635,27 +674,42 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "house" && seg[1] === "settings" && method === "GET") {
     db.houseSettings.houseFeePercent = 3;
-    return json({ ...db.houseSettings, deposits: db.houseDeposits || [], payments: db.chainPayments || [] });
+    const fresh = !db.houseWallet?.key;
+    const body = publicHouse();
+    if (fresh) save();
+    return json(body);
   }
   if (seg[0] === "house" && seg[1] === "settings" && method === "POST") {
     const body = await readJson(input, init);
-    const actor = String(body.actor || "").trim().toLowerCase();
-    if (actor !== "flint") return json({ error: "Only the house can set this wallet" }, 403);
-    const wallet = String(body.feeWallet ?? db.houseSettings.feeWallet ?? "").trim();
-    const chain = body.chain === "ethereum" ? "ethereum" : "base";
-    db.houseSettings.feeWallet = wallet;
-    db.houseSettings.holdingWallet = wallet;
-    db.houseSettings.chain = chain;
+    const actor = String(body.actor || "").trim();
+    if (!isHouseAdmin(actor)) return json({ error: "Only an admin can change the house wallet" }, 403);
+    ensureHouseWallet();
+    db.houseSettings.chain = body.chain === "ethereum" ? "ethereum" : "base";
     db.houseSettings.houseFeePercent = 3;
-    sweepHouseWallet(wallet);
-    for (const row of db.chainPayments || []) {
-      if (row.status === "pending") {
-        row.wallet = wallet;
-        row.chain = chain;
+    const payout = String(body.payout || "").trim();
+    if (payout) {
+      if (!isEvmAddress(payout)) return json({ error: "That payout address is not a 0x address" }, 400);
+      if (payout.toLowerCase() !== db.houseWallet!.address.toLowerCase() && !db.payoutWallets.some((item) => item.toLowerCase() === payout.toLowerCase())) {
+        db.payoutWallets.push(payout);
       }
     }
     save();
-    return json({ success: true, ...db.houseSettings, deposits: db.houseDeposits || [], payments: db.chainPayments || [] });
+    return json({ success: true, ...publicHouse() });
+  }
+  if (seg[0] === "house" && seg[1] === "export" && method === "POST") {
+    const body = await readJson(input, init);
+    const actor = String(body.actor || "").trim();
+    if (!isHouseAdmin(actor)) return json({ error: "Only an admin can export" }, 403);
+    const wallet = ensureHouseWallet();
+    const to = String(body.to || "").trim();
+    const amount = body.amount === undefined || body.amount === "" ? undefined : Number(body.amount);
+    try {
+      const tx = await exportHouseUsdc(wallet.key, db.houseSettings.chain || "base", to, amount);
+      save();
+      return json({ success: true, tx });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "The export was refused" }, 400);
+    }
   }
   if (seg[0] === "house" && seg[1] === "payments" && seg[3] === "sent" && method === "POST") {
     const row = (db.chainPayments || []).find((item) => item.id === seg[2]);

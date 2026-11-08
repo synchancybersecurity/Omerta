@@ -1,3 +1,5 @@
+import { Contract, JsonRpcProvider, Wallet } from "ethers";
+
 export const CHAINS = {
   base: {
     id: 8453,
@@ -57,6 +59,37 @@ function transferData(wallet: string, amount: number) {
   const units = BigInt(Math.round(amount * 1_000_000));
   const pad = (hex: string) => hex.replace(/^0x/i, "").padStart(64, "0");
   return { units, data: "0xa9059cbb" + pad(wallet) + pad(units.toString(16)) };
+}
+
+export function createHouseWallet() {
+  const wallet = Wallet.createRandom();
+  return { address: wallet.address, key: wallet.privateKey };
+}
+
+export async function exportHouseUsdc(key: string, chainName: string, to: string, amount?: number) {
+  const chain = chainOf(chainName);
+  if (!isEvmAddress(to)) throw new Error("That payout address is not a 0x address");
+  const provider = new JsonRpcProvider(chain.rpc);
+  const wallet = new Wallet(key, provider);
+  const usdc = new Contract(
+    chain.usdc,
+    ["function balanceOf(address) view returns (uint256)", "function transfer(address to, uint256 amount) returns (bool)"],
+    wallet,
+  );
+  const balance = (await usdc.balanceOf(wallet.address)) as bigint;
+  const units = amount && amount > 0 ? BigInt(Math.round(amount * 1_000_000)) : balance;
+  if (units <= 0n) throw new Error("The house wallet has no USDC to export");
+  if (units > balance) throw new Error("The house wallet does not hold that much USDC");
+  try {
+    const tx = await usdc.transfer(to, units);
+    return String(tx.hash);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "The export was refused";
+    if (/insufficient funds/i.test(message)) {
+      throw new Error("The house wallet needs a little ETH on this chain before it can export");
+    }
+    throw new Error(message);
+  }
 }
 
 export async function payHouseCut(chainName: string, wallet: string, amount: number) {
