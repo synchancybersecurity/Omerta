@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MAX_ATTACHMENT_BYTES } from "@omerta/components/Attachment";
+import { MAX_ATTACHMENT_BYTES, VaultImg } from "@omerta/components/Attachment";
 import { useApp } from "@omerta/store/AppContext";
 import { ArrowLeft, Clock, Gavel, Heart, Plus, Search, Store, Tag } from "lucide-react";
 
@@ -217,15 +217,21 @@ export default function MrktTab() {
     await load();
   };
 
-  const onPhoto = (file: File | undefined) => {
+  const onPhoto = async (file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES) {
-      setNotice("Use an image under 8 MB");
+      setNotice("That image is too large");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setForm((prev) => ({ ...prev, image: String(reader.result) }));
-    reader.readAsDataURL(file);
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body });
+    const data = await res.json();
+    if (!res.ok || !data.url) {
+      setNotice(data.error || "The photo was not saved");
+      return;
+    }
+    setForm((prev) => ({ ...prev, image: data.url }));
   };
 
   return (
@@ -295,7 +301,7 @@ export default function MrktTab() {
       {open && (
         <div className="px-4 py-4 pb-10 space-y-4">
           <div className="rounded-md overflow-hidden border" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--card))" }}>
-            {open.image ? <img src={open.image} alt="" className="w-full h-56 object-cover" /> : <div className="h-40 flex items-center justify-center"><Tag size={28} style={{ color: "hsl(var(--primary))" }} /></div>}
+            {open.image ? <VaultImg src={open.image} className="w-full h-56 object-cover" /> : <div className="h-40 flex items-center justify-center"><Tag size={28} style={{ color: "hsl(var(--primary))" }} /></div>}
           </div>
           <div>
             <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>{open.category} · {open.seller}</p>
@@ -355,7 +361,7 @@ export default function MrktTab() {
           </div>
           <label className="block font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Photo, optional</label>
           <input type="file" accept="image/*" onChange={(e) => onPhoto(e.target.files?.[0])} className="font-mono text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }} />
-          {form.image && <img src={form.image} alt="" className="w-full h-36 object-cover rounded-sm" />}
+          {form.image && <VaultImg src={form.image} className="w-full h-36 object-cover rounded-sm" />}
           <button type="submit" disabled={busy} className="w-full py-3 rounded-sm font-mono text-xs uppercase tracking-wider" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>List this lot</button>
         </form>
       )}
@@ -364,7 +370,7 @@ export default function MrktTab() {
 }
 
 function Thumb({ lot }: { lot: Listing }) {
-  if (lot.image) return <img src={lot.image} alt="" className="w-20 h-20 rounded-sm object-cover shrink-0" />;
+  if (lot.image) return <VaultImg src={lot.image} className="w-20 h-20 rounded-sm object-cover shrink-0" />;
   return <div className="w-20 h-20 rounded-sm shrink-0 flex items-center justify-center border" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}><Tag size={16} style={{ color: "hsl(var(--primary))" }} /></div>;
 }
 

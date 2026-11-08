@@ -184,7 +184,7 @@ export default function ChatTab() {
     setUploading(true);
     const result = await uploadFile(file);
     setUploading(false);
-    if (!result?.url) { showToast("// UPLOAD FAILED //"); return; }
+    if (!result?.url) { showToast(result?.error || "// UPLOAD FAILED //"); return; }
     const packed = packAttachment(file, result.url);
     if (activeRoomId === "general") {
       sendOpenChatMessage(userHandle, packed, false, false, replyingTo?.id || null, replyingTo?.content || null, replyingTo?.sender || null);

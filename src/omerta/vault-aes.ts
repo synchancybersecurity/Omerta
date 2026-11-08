@@ -27,6 +27,18 @@ async function vaultKey() {
   return crypto.subtle.importKey("raw", b64ToBytes(stored), { name: ALGO }, false, ["encrypt", "decrypt"]);
 }
 
+export async function sealBytes(plain: BufferSource) {
+  const key = await vaultKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: ALGO, iv }, key, plain);
+  return { iv: iv.buffer, data };
+}
+
+export async function openBytes(iv: ArrayBuffer, data: ArrayBuffer) {
+  const key = await vaultKey();
+  return crypto.subtle.decrypt({ name: ALGO, iv: new Uint8Array(iv) }, key, data);
+}
+
 export async function sealVault(plain: string) {
   const key = await vaultKey();
   const iv = crypto.getRandomValues(new Uint8Array(12));

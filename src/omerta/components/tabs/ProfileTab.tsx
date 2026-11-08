@@ -772,7 +772,7 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = "";
-                      if (!file || !file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES) return;
+                      if (!file || !file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) return;
                       const reader = new FileReader();
                       reader.onload = () => {
                         setSelectedAvatar(String(reader.result));
@@ -882,16 +882,10 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
             className="w-full rounded-lg px-3 py-2 font-mono text-sm focus:outline-none resize-none transition-colors mb-3"
             style={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }}
           />
-          {postAttach?.startsWith("[img:") && (
+          {postAttach && (
             <div className="mt-2 mb-2 relative">
-              <img src={postAttach.slice(5, -1)} alt="" className="w-full max-h-40 object-cover rounded-lg" style={{ border: "1px solid hsl(var(--border))" }} />
+              <AttachmentView content={postAttach} />
               <button onClick={() => setPostAttach(null)} className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"><X size={12} /></button>
-            </div>
-          )}
-          {postAttach?.startsWith("[file:") && (
-            <div className="mt-2 mb-2 flex items-center justify-between px-2 py-2 rounded-sm border" style={{ borderColor: "hsl(var(--border))" }}>
-              <span className="font-mono text-[10px]" style={{ color: "hsl(var(--foreground))" }}>File attached</span>
-              <button onClick={() => setPostAttach(null)} style={{ color: "hsl(var(--muted-foreground))" }}><X size={12} /></button>
             </div>
           )}
           <div className="flex items-center justify-between">
@@ -923,6 +917,7 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
                   setPostUploading(true);
                   const data = await uploadFile(file);
                   if (data && data.url) setPostAttach(packAttachment(file, data.url));
+                  else showToast(data?.error || "// UPLOAD FAILED //");
                   setPostUploading(false);
                 }}
               />

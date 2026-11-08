@@ -537,7 +537,7 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
       );
       setReplyingTo(null);
     } else {
-      showToast('// UPLOAD FAILED //');
+      showToast(result?.error || '// UPLOAD FAILED //');
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };

@@ -1,5 +1,5 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
-import { vaultGet, vaultSet } from "@omerta/vault-store";
+import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
 
 const KEY = "omerta_db_v1";
 
@@ -609,13 +609,13 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (body instanceof FormData) {
       const file = body.get("file");
       if (file instanceof File) {
-        const url = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        });
-        return json({ url });
+        try {
+          const id = await storeVaultFile(await file.arrayBuffer(), file.type || "application/octet-stream");
+          return json({ url: "vault:" + id, name: file.name });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Upload failed";
+          return json({ error: message }, 413);
+        }
       }
     }
     return json({ error: "No file" }, 400);
@@ -950,7 +950,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       title: title.slice(0, 80),
       description: String(body.description || "").trim().slice(0, 800),
       category: String(body.category || "Oddities"),
-      image: typeof body.image === "string" && body.image.startsWith("data:image/") ? body.image : null,
+      image: typeof body.image === "string" && (body.image.startsWith("data:image/") || body.image.startsWith("vault:")) ? body.image : null,
       start_price: Math.round(start * 100) / 100,
       buy_now: buyNow === null ? null : Math.round(buyNow * 100) / 100,
       ends_at: Date.now() + days * 86400000,
@@ -1037,6 +1037,7 @@ export function installLocalApi() {
   const w = window as Window & { __omertaApi?: boolean };
   if (w.__omertaApi) return;
   w.__omertaApi = true;
+  void navigator.storage?.persist?.();
   const orig = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
