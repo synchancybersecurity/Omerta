@@ -72,6 +72,7 @@ type Db = {
   publicKeys: Record<string, string>;
   listings: Listing[];
   moneyUnit?: "btc";
+  captures: Array<{ id: string; handle: string; kind: "screenshot" | "recording"; timestamp: number }>;
 };
 
 type ChainPayment = {
@@ -303,6 +304,7 @@ function emptyDb(): Db {
     payoutWallets: [],
     publicKeys: {},
     listings: [],
+    captures: [],
   };
 }
 
@@ -341,6 +343,48 @@ async function convertDollarBooks() {
   db.moneyUnit = "btc";
 }
 
+function bumpReveal(row: { emoji_encrypted?: number; is_burned?: number; content?: string; reveals?: Record<string, number> } | undefined, handle: string) {
+  const name = handle.trim().toLowerCase();
+  if (!row || row.emoji_encrypted !== 1 || row.is_burned || !name) return { count: 0, burned: false };
+  const reveals = row.reveals && typeof row.reveals === "object" ? row.reveals : {};
+  const count = Number(reveals[name] || 0) + 1;
+  reveals[name] = count;
+  row.reveals = reveals;
+  const burned = count >= 2;
+  if (burned) {
+    row.is_burned = 1;
+    row.content = "// BURNED //";
+    row.emoji_encrypted = 0;
+  }
+  save();
+  return { count, burned };
+}
+
+function noteCapture(handle: string, kind: "screenshot" | "recording", roomId?: string) {
+  const name = handle.trim();
+  if (!name) return null;
+  const now = Date.now();
+  const recent = db.captures.find((row) => sameHandle(row.handle, name) && row.kind === kind && now - row.timestamp < 3000);
+  if (recent) return recent;
+  const row = { id: "cap" + nid(), handle: name, kind, timestamp: now };
+  db.captures.push(row);
+  const text = name + (kind === "recording" ? " started a screen recording." : " took a screenshot.");
+  const notice = {
+    id: nid(),
+    sender_handle: "notice",
+    content: text,
+    timestamp: now,
+    emoji_encrypted: 0,
+    system: 1,
+  };
+  db.openChatMessages.push(notice);
+  if (roomId && roomId !== "general") {
+    db.roomMessages.push({ ...notice, room_id: roomId });
+  }
+  save();
+  return row;
+}
+
 function nid() {
   seq += 1;
   return Date.now() + seq;
@@ -372,7 +416,7 @@ async function loadAsync() {
       db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: "bitcoin" };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
-      if (!Array.isArray(db.payoutWallets)) db.payoutWallets = [];
+      if (!Array.isArray(db.captures)) db.captures = [];
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
@@ -404,6 +448,7 @@ function publicSnapshot(): PublicBoard {
     rooms: db.chatRooms.map(({ password: _password, ...room }) => room),
     roomMessages: db.roomMessages.filter((msg) => unlocked.has(String(msg.room_id)) && Number(msg.timestamp) >= (db.roomClearedAt || 0)).slice(-80),
     lots: db.listings.slice(0, 40).map((lot) => ({ ...lot, image: light(lot.image) as string | null })),
+    captures: (db.captures || []).slice(-40),
   };
 }
 
@@ -455,6 +500,7 @@ function mergeBoard(remote: PublicBoard) {
       changed = true;
     }
   }
+  for (const row of remote.captures || []) add(db.captures, row as Db["captures"][number]);
   return changed;
 }
 
@@ -724,6 +770,35 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     db.messages.push(msg);
     save();
     return json(msg);
+  }
+
+  if (seg[0] === "messages" && seg[2] === "reveal" && method === "POST") {
+    const body = await readJson(input, init);
+    const msg = db.messages.find((item) => item.id === Number(seg[1]));
+    return json(bumpReveal(msg, String(body.handle || "")));
+  }
+
+  if (seg[0] === "reveal" && method === "POST") {
+    const body = await readJson(input, init);
+    const handle = String(body.handle || "");
+    const id = String(body.id || "");
+    const scope = String(body.scope || "");
+    if (scope === "dm") return json(bumpReveal(db.messages.find((item) => item.id === Number(id)), handle));
+    if (scope === "chat") return json(bumpReveal(db.openChatMessages.find((item) => String(item.id) === id) as { emoji_encrypted?: number; is_burned?: number; content?: string; reveals?: Record<string, number> }, handle));
+    if (scope === "room") return json(bumpReveal(db.roomMessages.find((item) => String(item.id) === id) as { emoji_encrypted?: number; is_burned?: number; content?: string; reveals?: Record<string, number> }, handle));
+    if (scope === "post") return json(bumpReveal(db.posts.find((item) => item.id === id), handle));
+    return json({ count: 0, burned: false });
+  }
+
+  if (seg[0] === "captures" && method === "GET") {
+    return json(db.captures.slice(-80));
+  }
+
+  if (seg[0] === "captures" && method === "POST") {
+    const body = await readJson(input, init);
+    const kind = body.kind === "recording" ? "recording" : "screenshot";
+    const row = noteCapture(String(body.handle || ""), kind, String(body.room || ""));
+    return json({ row, captures: db.captures.slice(-80) });
   }
 
   if (seg[0] === "messages" && seg[2] === "burn" && method === "POST") {

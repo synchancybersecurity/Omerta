@@ -13,6 +13,7 @@ import EscrowTab from './tabs/EscrowTab';
 import SettingsTab from './tabs/SettingsTab';
 import SynTab from './tabs/SynTab';
 import MrktTab from './tabs/MrktTab';
+import CaptureWatch from './CaptureWatch';
 
 const BASE_TABS = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -73,6 +74,7 @@ export default function MainShell() {
 
   return (
     <div className="safe-shell flex h-full w-full min-h-0 relative" style={{ background: 'hsl(var(--background))' }}>
+      <CaptureWatch />
       {/* Left Tab Bar */}
       <div className="w-12 md:w-16 flex-shrink-0 flex flex-col items-center py-2 md:py-4 border-r z-10 overflow-y-auto scrollbar-hide" style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))' }}>
         {/* Logo */}

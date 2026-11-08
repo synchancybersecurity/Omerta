@@ -34,6 +34,7 @@ interface ApiContextValue {
     timestamp: number;
     emoji_encrypted: number;
     e2e_encrypted: number;
+    system?: number;
     reply_to?: number | null;
     reply_content?: string | null;
     reply_sender?: string | null;
@@ -47,6 +48,7 @@ interface ApiContextValue {
     is_burned: number;
     emoji_encrypted: number;
     e2e_encrypted: number;
+    system?: number;
     reply_to?: string | null;
     reply_content?: string | null;
     reply_sender?: string | null;
@@ -103,7 +105,7 @@ interface ApiContextValue {
   saveHouseSettings: (settings: { feeWallet?: string; chain?: string; payout?: string; actor?: string }) => Promise<{ error?: string } | null | void>;
   searchMessages: (handle: string, query: string) => Promise<Array<Record<string, unknown>>>;
   chatRooms: Array<{ id: string; name: string; creator_handle: string; creator_role?: string; is_locked: number; password?: string | null; locked_by?: string | null; lock_reason?: string | null; created_at: number }>;
-  roomMessages: Array<{ id: number; room_id: string; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; e2e_encrypted: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null }>;
+  roomMessages: Array<{ id: number; room_id: string; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; e2e_encrypted: number; system?: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null }>;
   activeRoomId: string | null;
   setActiveRoomId: (id: string | null) => void;
   fetchChatRooms: () => Promise<void>;
@@ -114,6 +116,8 @@ interface ApiContextValue {
   fetchRoomMessages: (roomId: string) => Promise<void>;
   sendRoomMessage: (roomId: string, sender: string, content: string, emojiEncrypted?: boolean, e2eEncrypted?: boolean, replyTo?: number | null, replyContent?: string | null, replySender?: string | null) => Promise<void>;
   fetchPosts: () => Promise<void>;
+  captures: Array<{ id: string; handle: string; kind: "screenshot" | "recording"; timestamp: number }>;
+  reportCapture: (handle: string, kind: "screenshot" | "recording") => Promise<void>;
   createPost: (author: string, authorHandle: string, content: string, emojiEncrypted?: boolean, burnAfter?: boolean, authorAvatar?: string | null) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
   likePost: (postId: string, userHandle: string) => Promise<void>;
@@ -142,6 +146,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   const [openChatMessages, setOpenChatMessages] = useState<ApiContextValue['openChatMessages']>([]);
   const [messages, setMessages] = useState<ApiContextValue['messages']>({});
   const [posts, setPosts] = useState<ApiContextValue['posts']>([]);
+  const [captures, setCaptures] = useState<ApiContextValue['captures']>([]);
   const [replies, setReplies] = useState<ApiContextValue['replies']>({});
   const [smsMessages, setSmsMessages] = useState<ApiContextValue['smsMessages']>([]);
   const [searchResults, setSearchResults] = useState<ApiContextValue['searchResults']>([]);
@@ -487,6 +492,20 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     } catch { /* silently fail */ }
   }, []);
 
+  const reportCapture = useCallback(async (handle: string, kind: "screenshot" | "recording") => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/captures`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle, kind, room: activeRoomId || "" }),
+      });
+      const data = await res.json();
+      if (Array.isArray(data.captures)) setCaptures(data.captures);
+      await fetchOpenChat();
+      if (activeRoomId && activeRoomId !== "general") await fetchRoomMessages(activeRoomId);
+    } catch { /* the notice can wait for the next refresh */ }
+  }, [activeRoomId, fetchOpenChat, fetchRoomMessages]);
+
   const createPost = useCallback(async (author: string, authorHandle: string, content: string, emojiEncrypted = false, burnAfter = false, authorAvatar: string | null = null) => {
     try {
       await fetch(`${API_BASE_URL}/api/posts`, {
@@ -567,6 +586,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
         fetchOpenChat(),
         fetchChatRooms(),
         fetchPosts(),
+        fetch(`${API_BASE_URL}/api/captures`).then((res) => res.json()).then((data) => { if (Array.isArray(data)) setCaptures(data); }).catch(() => {}),
         fetchConversations(userHandle),
         fetchSMS(userHandle),
       ]);
@@ -644,6 +664,8 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       fetchRoomMessages,
       sendRoomMessage,
       fetchPosts,
+      captures,
+      reportCapture,
       createPost,
       deletePost,
       likePost,

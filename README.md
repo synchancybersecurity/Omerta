@@ -57,6 +57,10 @@ A post or a private message can be marked to burn after it is read. A burned mes
 
 A member can also turn on end to end encryption for a private thread. That option encrypts the message for the other handle before it is stored. It is optional. The vault seal still covers everything on disk either way.
 
+An emoji locked message stays disguised until someone holds it. That person may hold it open twice. After the second time, the message burns and is replaced with a burned notice.
+
+If the phone tells the app that the signed in person took a screenshot, printed the page, or started a screen recording, the lounge writes a line with that person's name. The same names stay listed at the top of the chat. A capture the phone keeps to itself cannot be named.
+
 ## The market
 
 MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. A photograph can be attached to the listing. The clock shows how much time is left.

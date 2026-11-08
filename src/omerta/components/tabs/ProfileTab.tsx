@@ -97,6 +97,7 @@ function PostCard({
   authorAvatar?: string | null;
 }) {
   const [isDecrypted, setIsDecrypted] = useState(false);
+  const viewed = useRef(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -115,8 +116,24 @@ function PostCard({
   const displayContent = isEncrypted && !isDecrypted ? encryptedText : post.content;
 
   const longPress = useLongPress({
-    onLongPress: () => { if (isEncrypted) setIsDecrypted(true); },
-    onRelease: () => { if (isEncrypted) setIsDecrypted(false); },
+    onLongPress: () => {
+      if (isEncrypted && !isBurned) {
+        setIsDecrypted(true);
+        viewed.current = true;
+      }
+    },
+    onRelease: () => {
+      if (isEncrypted) setIsDecrypted(false);
+      if (!viewed.current) return;
+      viewed.current = false;
+      fetch("/api/reveal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "post", id: post.id, handle: currentUser }),
+      }).then((res) => res.json()).then((data) => {
+        if (data.burned) onBurn(post.id);
+      }).catch(() => {});
+    },
     ms: 600,
   });
 

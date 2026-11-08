@@ -7,27 +7,54 @@ import { AttachmentView, attachmentLabel, packAttachment } from '@omerta/compone
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
-function RoomBubble({ msg, isMe, currentUserHandle, onReply, onViewUser }: {
-  msg: { id: number; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null };
+function RoomBubble({ msg, isMe, currentUserHandle, scope, onReply, onViewUser }: {
+  msg: { id: number; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; system?: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null };
   isMe: boolean;
   currentUserHandle: string;
+  scope: "chat" | "room";
   onReply: (id: number, content: string, sender: string) => void;
   onViewUser?: (handle: string) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const [decrypted, setDecrypted] = useState(false);
+  const [burned, setBurned] = useState(msg.content === "// BURNED //");
+  const viewed = useRef(false);
   const { userProfiles } = useApi();
 
   const senderAvatar = userProfiles[msg.sender_handle]?.avatar || null;
-  const isEncrypted = msg.emoji_encrypted === 1;
-
+  const isEncrypted = msg.emoji_encrypted === 1 && !burned;
   const { handlers } = useLongPress({
-    onLongPress: () => { if (isEncrypted) setDecrypted(true); },
-    onRelease: () => setDecrypted(false),
+    onLongPress: () => {
+      if (!isEncrypted) return;
+      setDecrypted(true);
+      viewed.current = true;
+    },
+    onRelease: () => {
+      setDecrypted(false);
+      if (!viewed.current) return;
+      viewed.current = false;
+      fetch("/api/reveal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope, id: msg.id, handle: currentUserHandle }),
+      }).then((res) => res.json()).then((data) => {
+        if (data.burned) setBurned(true);
+      }).catch(() => {});
+    },
     ms: 600,
   });
 
-  const displayContent = isEncrypted
+  if (msg.system === 1 || msg.sender_handle === "notice") {
+    return (
+      <div className="flex justify-center my-2">
+        <span className="font-mono text-[10px] tracking-wider text-center" style={{ color: "hsl(var(--primary))" }}>{msg.content}</span>
+      </div>
+    );
+  }
+
+  const displayContent = burned
+    ? "// BURNED //"
+    : isEncrypted
     ? (decrypted ? emojiDecrypt(msg.content) || msg.content : msg.content)
     : msg.content;
 
@@ -72,7 +99,7 @@ function RoomBubble({ msg, isMe, currentUserHandle, onReply, onViewUser }: {
             borderRadius: isMe ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
           }}
         >
-          {isEncrypted && <div className="flex items-center gap-1 mb-1 opacity-60"><Lock size={9} style={{ color: 'hsl(var(--primary))' }} /><span className="font-mono text-[8px] tracking-wider" style={{ color: 'hsl(var(--primary))' }}>ENCRYPTED{decrypted ? ' · HOLD TO HIDE' : ' · HOLD TO REVEAL'}</span></div>}
+          {isEncrypted && <div className="flex items-center gap-1 mb-1 opacity-60"><Lock size={9} style={{ color: 'hsl(var(--primary))' }} /><span className="font-mono text-[8px] tracking-wider" style={{ color: 'hsl(var(--primary))' }}>ENCRYPTED{decrypted ? ' · HOLD TO HIDE' : ' · HOLD TO REVEAL'} · BURNS AFTER TWO VIEWS</span></div>}
           <div className="flex items-center gap-2 mb-1">
             <span className="font-serif text-xs tracking-wider" style={{ color: isMe ? 'hsl(var(--accent-sent))' : 'hsl(var(--accent-recv))' }}>{msg.sender_handle}</span>
           </div>
@@ -103,7 +130,7 @@ export default function ChatTab() {
   const {
     openChatMessages, fetchOpenChat, sendOpenChatMessage,
     chatRooms, fetchChatRooms, createChatRoom, deleteChatRoom, lockChatRoom, unlockChatRoom,
-    roomMessages, fetchRoomMessages, sendRoomMessage,
+    roomMessages, fetchRoomMessages, sendRoomMessage, captures,
     activeRoomId, setActiveRoomId, userProfiles, fetchUserProfile,
     createConversation, fetchConversations, uploadFile,
   } = useApi();
@@ -253,7 +280,9 @@ export default function ChatTab() {
     e.target.style.height = e.target.scrollHeight + 'px';
   };
 
-  const activeRoomName = activeRoomId === 'general' ? 'THE LOUNGE' : (chatRooms.find(r => r.id === activeRoomId)?.name || 'Room');
+  const shotNames = [...new Set(captures.filter((row) => row.kind === "screenshot").map((row) => row.handle))];
+  const recNames = [...new Set(captures.filter((row) => row.kind === "recording").map((row) => row.handle))];
+  const activeRoomName = activeRoomId === "general" ? "THE LOUNGE" : (chatRooms.find(r => r.id === activeRoomId)?.name || "Room");
   const activeRoomLocked = activeRoomId !== 'general' ? (chatRooms.find(r => r.id === activeRoomId)?.is_locked === 1) : false;
   const displayMessages = activeRoomId === 'general' ? openChatMessages : roomMessages;
 
@@ -509,6 +538,13 @@ export default function ChatTab() {
             <span className="font-mono text-[10px] tracking-wider" style={{ color: 'hsl(var(--primary) / 0.7)' }}>
               {displayMessages.length} MESSAGES · OPEN TO EVERYONE · CLEARS EVERY 48 HOURS
             </span>
+            {(shotNames.length > 0 || recNames.length > 0) && (
+              <span className="font-mono text-[10px] block" style={{ color: "hsl(var(--destructive))" }}>
+                {shotNames.length > 0 ? "Screenshots: " + shotNames.join(", ") : ""}
+                {shotNames.length > 0 && recNames.length > 0 ? " · " : ""}
+                {recNames.length > 0 ? "Recordings: " + recNames.join(", ") : ""}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -521,6 +557,7 @@ export default function ChatTab() {
             msg={msg}
             isMe={msg.sender_handle === userHandle || msg.sender_handle === 'ANON'}
             currentUserHandle={userHandle}
+            scope={activeRoomId === "general" ? "chat" : "room"}
             onReply={(id, content, sender) => { setReplyingTo({ id, content, sender }); inputRef.current?.focus(); }}
             onViewUser={(h) => setProfileUser({ handle: h })}
           />

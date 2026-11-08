@@ -116,6 +116,7 @@ function MessageBubble({
   const [burning, setBurning] = useState(false);
   const [visible, setVisible] = useState(true);
   const [decrypted, setDecrypted] = useState(false);
+  const viewed = useRef(false);
   const [e2ePlaintext, setE2ePlaintext] = useState<string | null>(null);
   const [e2eDecrypting, setE2eDecrypting] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -142,6 +143,28 @@ function MessageBubble({
     }
   }, [message.isE2EEncrypted, message.content]);
 
+  const { handlers } = useLongPress({
+    ms: 500,
+    onLongPress: () => {
+      if (message.isEmojiEncrypted && !message.isBurned) {
+        setDecrypted(true);
+        viewed.current = true;
+      }
+    },
+    onRelease: () => {
+      if (message.isEmojiEncrypted) setDecrypted(false);
+      if (!viewed.current) return;
+      viewed.current = false;
+      fetch("/api/reveal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "dm", id: message.id, handle: currentUserHandle }),
+      }).then((res) => res.json()).then((data) => {
+        if (data.burned) onBurn();
+      }).catch(() => {});
+    },
+  });
+
   if (!visible) return null;
 
   const isSystem = message.isSystem;
@@ -158,16 +181,6 @@ function MessageBubble({
       </div>
     );
   }
-
-  const { handlers } = useLongPress({
-    ms: 500,
-    onLongPress: () => {
-      if (message.isEmojiEncrypted) setDecrypted(true);
-    },
-    onRelease: () => {
-      if (message.isEmojiEncrypted) setDecrypted(false);
-    },
-  });
 
   const displayContent = message.isE2EEncrypted
     ? (e2ePlaintext || '// E2E ENCRYPTED //')
@@ -470,7 +483,7 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
     isSent: msg.sender_handle === userHandle,
     burnAfterRead: msg.burn_after_read === 1,
     isBurned: msg.is_burned === 1,
-    isSystem: false,
+    isSystem: msg.sender_handle === "notice" || msg.system === 1,
     isEmojiEncrypted: msg.emoji_encrypted === 1,
     isE2EEncrypted: msg.e2e_encrypted === 1,
     replyTo: msg.reply_to ? String(msg.reply_to) : undefined,
