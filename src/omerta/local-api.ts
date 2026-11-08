@@ -58,11 +58,12 @@ type Db = {
   escrows: Array<Record<string, unknown>>;
   chatRooms: Room[];
   roomMessages: Array<Record<string, unknown>>;
+  roomClearedAt: number;
   houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number };
   publicKeys: Record<string, string>;
 };
 
-const ROOM_LIMITS: Record<string, number> = { admin: Infinity, moderator: 3, basic: 1 };
+const ROOM_CLEAR_MS = 48 * 60 * 60 * 1000;
 
 function emptyDb(): Db {
   const now = Date.now();
@@ -139,6 +140,7 @@ function emptyDb(): Db {
         reply_sender: null,
       },
     ],
+    roomClearedAt: now,
     houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 2.25 },
     publicKeys: {},
   };
@@ -170,6 +172,20 @@ function save() {
   } catch {
     /* memory copy still stands */
   }
+}
+
+function clearRoomsIfDue() {
+  const started = Number(db.roomClearedAt) || 0;
+  if (!started) {
+    db.roomClearedAt = Date.now();
+    save();
+    return;
+  }
+  if (Date.now() - started < ROOM_CLEAR_MS) return;
+  db.openChatMessages = [];
+  db.roomMessages = [];
+  db.roomClearedAt = Date.now();
+  save();
 }
 
 function json(data: unknown, status = 200) {
@@ -205,6 +221,7 @@ function viewPost(p: Post) {
 
 async function route(path: string, method: string, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   load();
+  clearRoomsIfDue();
   const url = new URL(path, "http://local");
   const q = url.searchParams;
   const parts = url.pathname.split("/").filter(Boolean); // api, ...
@@ -508,17 +525,13 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "chat-rooms" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
-    const role = body.role || "basic";
-    const limit = ROOM_LIMITS[role] ?? 1;
-    const count = db.chatRooms.filter((r) => r.creator_handle === body.creatorHandle).length;
-    if (count >= limit) return json({ error: "Room limit reached for your role" }, 403);
     const room: Room = {
       id: "room-" + nid(),
       name: body.name || "Untitled Room",
       creator_handle: body.creatorHandle,
-      creator_role: role,
-      is_locked: body.isLocked ? 1 : 0,
-      password: body.password || null,
+      creator_role: body.role || "basic",
+      is_locked: 0,
+      password: null,
       locked_by: null,
       lock_reason: null,
       created_at: Date.now(),
@@ -529,11 +542,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   }
 
   if (seg[0] === "chat-rooms" && seg[2] === "verify" && method === "POST") {
-    const body = await readJson(input, init);
     const room = db.chatRooms.find((r) => r.id === seg[1]);
-    if (!room) return json({ valid: false });
-    const valid = !room.is_locked || room.password === body.password;
-    return json({ valid });
+    return json({ valid: Boolean(room) });
   }
 
   if (seg[0] === "chat-rooms" && seg[2] === "lock" && method === "POST") {

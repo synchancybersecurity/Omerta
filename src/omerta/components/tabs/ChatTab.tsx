@@ -124,6 +124,16 @@ export default function ChatTab() {
   // Fetch rooms and profiles
   useEffect(() => { fetchChatRooms(); fetchOpenChat(); }, [fetchChatRooms, fetchOpenChat]);
 
+  useEffect(() => {
+    const tick = () => {
+      fetchOpenChat();
+      fetchChatRooms();
+      if (activeRoomId && activeRoomId !== "general") fetchRoomMessages(activeRoomId);
+    };
+    const id = window.setInterval(tick, 30000);
+    return () => window.clearInterval(id);
+  }, [activeRoomId, fetchChatRooms, fetchOpenChat, fetchRoomMessages]);
+
   // Fetch messages for active room
   useEffect(() => {
     if (activeRoomId === 'general') {
@@ -164,13 +174,9 @@ export default function ChatTab() {
     if (inputRef.current) inputRef.current.style.height = 'auto';
   };
 
-  const myRoomCount = chatRooms.filter(r => r.creator_handle === userHandle).length;
-  const canCreateRoom = userRole === 'admin' || (userRole === 'moderator' && myRoomCount < 3) || (userRole === 'basic' && myRoomCount < 1);
-
   const handleCreateRoom = async () => {
-    if (!roomName.trim()) { showToast('// NAME REQUIRED //'); return; }
-    if (!canCreateRoom) { showToast(`// ROOM LIMIT REACHED (${userRole}) //`); return; }
-    const result = await createChatRoom(roomName.trim(), userHandle, userRole, roomLocked, roomLocked ? roomPassword : null);
+    if (!roomName.trim()) { showToast("// NAME REQUIRED //"); return; }
+    const result = await createChatRoom(roomName.trim(), userHandle, userRole, false, null);
     if (result && 'id' in result) {
       setShowCreateRoom(false);
       setRoomName('');
@@ -186,13 +192,9 @@ export default function ChatTab() {
     }
   };
 
-  const handleJoinRoom = (roomId: string, isLocked: boolean) => {
-    if (isLocked) {
-      setPasswordRoom(roomId);
-    } else {
-      setActiveRoomId(roomId);
-      setShowRoomList(false);
-    }
+  const handleJoinRoom = (roomId: string) => {
+    setActiveRoomId(roomId);
+    setShowRoomList(false);
   };
 
   const handleVerifyPassword = async () => {
@@ -244,18 +246,16 @@ export default function ChatTab() {
             <Users size={16} style={{ color: 'hsl(var(--primary))' }} />
             <div>
               <h3 className="font-mono text-sm uppercase tracking-wider" style={{ color: 'hsl(var(--foreground))' }}>Chat Rooms</h3>
-              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{chatRooms.length + 1} rooms · {myRoomCount} yours</p>
+              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{chatRooms.length + 1} rooms · open to everyone · clears every 48 hours</p>
             </div>
           </div>
-          {canCreateRoom && (
-            <button
+          <button
               onClick={() => setShowCreateRoom(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] uppercase rounded-sm"
               style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
             >
               <Plus size={12} /> Create Room
             </button>
-          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -273,7 +273,7 @@ export default function ChatTab() {
                 <span className="font-mono text-sm uppercase tracking-wider" style={{ color: 'hsl(var(--foreground))' }}>The Lounge</span>
                 <span className="font-mono text-[8px] px-1.5 py-0.5 rounded-sm" style={{ background: 'hsl(var(--primary) / 0.15)', color: 'hsl(var(--primary))' }}>PUBLIC</span>
               </div>
-              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Open to all · {openChatMessages.length} messages</p>
+              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Open to everyone · clears every 48 hours</p>
             </div>
           </button>
 
@@ -296,7 +296,7 @@ export default function ChatTab() {
             return (
               <div key={room.id} className="flex items-center gap-2">
                 <button
-                  onClick={() => handleJoinRoom(room.id, room.is_locked === 1)}
+                  onClick={() => handleJoinRoom(room.id)}
                   className="flex-1 flex items-center gap-3 p-3 border rounded-lg text-left transition-all hover:brightness-110"
                   style={{ borderColor: isOwn ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--border))', background: 'hsl(var(--card))' }}
                 >
@@ -361,7 +361,7 @@ export default function ChatTab() {
                 <h3 className="font-mono text-sm uppercase tracking-wider" style={{ color: 'hsl(var(--primary))' }}>Create Room</h3>
                 <button onClick={() => setShowCreateRoom(false)} className="p-1" style={{ color: 'hsl(var(--muted-foreground))' }}><X size={16} /></button>
               </div>
-              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>You can only have one room at a time</p>
+              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Anyone can talk in here. The whole room clears every 48 hours.</p>
               <input
                 type="text"
                 value={roomName}
@@ -480,8 +480,8 @@ export default function ChatTab() {
             {activeRoomLocked && <Lock size={12} style={{ color: 'hsl(var(--destructive))' }} />}
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="font-mono text-[10px] tracking-wider whitespace-nowrap" style={{ color: 'hsl(var(--primary) / 0.7)' }}>
-              {displayMessages.length} MESSAGES {activeRoomId !== 'general' ? `· ${chatRooms.find(r => r.id === activeRoomId)?.creator_handle}'s room` : '· OPEN TO ALL'}
+            <span className="font-mono text-[10px] tracking-wider" style={{ color: 'hsl(var(--primary) / 0.7)' }}>
+              {displayMessages.length} MESSAGES · OPEN TO EVERYONE · CLEARS EVERY 48 HOURS
             </span>
           </div>
         </div>
