@@ -12,6 +12,7 @@ export type PublicBoard = {
   roomMessages: Array<Record<string, unknown>>;
   lots: Array<Record<string, unknown>>;
   captures?: Array<Record<string, unknown>>;
+  wipes?: Array<{ handle?: string; at?: number }>;
 };
 
 type NostrEvent = {

@@ -479,6 +479,60 @@ function ToggleRow({ item, onToggle, accent = false }: { item: ToggleSetting; on
   );
 }
 
+function DataWipe() {
+  const { userHandle } = useApp();
+  const [enabled, setEnabled] = useState(false);
+  const [days, setDays] = useState(1);
+  const [wipeAt, setWipeAt] = useState(0);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (!userHandle) return;
+    fetch(`/api/settings/${encodeURIComponent(userHandle)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setEnabled(Boolean(data.wipeEnabled));
+        setDays(Math.min(7, Math.max(1, Number(data.wipeDays) || 1)));
+        setWipeAt(Number(data.wipeAt) || 0);
+      })
+      .catch(() => {});
+  }, [userHandle]);
+
+  const save = async (nextEnabled: boolean, nextDays: number) => {
+    setEnabled(nextEnabled);
+    setDays(nextDays);
+    const res = await fetch(`/api/settings/${encodeURIComponent(userHandle)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wipeEnabled: nextEnabled, wipeDays: nextDays }),
+    });
+    const data = await res.json();
+    setWipeAt(Number(data.wipeAt) || 0);
+    setNotice(nextEnabled ? "Wipe is on." : "Wipe is off.");
+  };
+
+  return (
+    <div className="mb-4 border rounded-lg p-3" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--card))" }}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-mono text-sm" style={{ color: "hsl(var(--foreground))" }}>Wipe my data</h3>
+          <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>Turn this on and choose 1 to 7 days. When the time is up, your messages, posts, auctions, and the rest of your stored info are deleted. Your handle stays.</p>
+        </div>
+        <button type="button" onClick={() => void save(!enabled, days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
+          {enabled ? "On" : "Off"}
+        </button>
+      </div>
+      <div className="flex gap-2 mt-3">
+        {[1, 2, 3, 4, 5, 6, 7].map((value) => (
+          <button key={value} type="button" onClick={() => void save(enabled, value)} className="flex-1 py-2 rounded-sm font-mono text-[10px] border" style={{ borderColor: days === value ? "hsl(var(--primary))" : "hsl(var(--border))", color: days === value ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>{value}d</button>
+        ))}
+      </div>
+      {enabled && wipeAt > 0 && <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--primary))" }}>Next wipe {new Date(wipeAt).toLocaleString()}.</p>}
+      {notice && <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>{notice}</p>}
+    </div>
+  );
+}
+
 export default function SettingsTab() {
   const { userRole, theme, updateTheme, resetTheme, userHandle } = useApp();
   const isModerator = userRole === 'moderator' || userRole === 'admin';
@@ -527,6 +581,8 @@ export default function SettingsTab() {
           <h2 className="font-serif text-3xl tracking-wider mb-1" style={{ color: 'hsl(var(--foreground))' }}>SETTINGS</h2>
           <p className="font-mono text-xs tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>// {userRole.toUpperCase()} ACCESS // PREFERENCES & SECURITY //</p>
         </div>
+
+        <DataWipe />
 
         {/* Profile & Identity */}
         <DropdownSection title="Profile & Identity" subtitle="// HANDLE & AVATAR //" icon={User}>

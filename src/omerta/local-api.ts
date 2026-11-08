@@ -75,6 +75,7 @@ type Db = {
   listings: Listing[];
   moneyUnit?: "btc";
   captures: Array<{ id: string; handle: string; kind: "screenshot" | "recording"; timestamp: number }>;
+  wipes: Array<{ handle: string; at: number }>;
 };
 
 type ChainPayment = {
@@ -308,6 +309,7 @@ function emptyDb(): Db {
     userKeys: {},
     listings: [],
     captures: [],
+    wipes: [],
   };
 }
 
@@ -470,6 +472,7 @@ async function loadAsync() {
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
       if (!db.userKeys) db.userKeys = {};
+      if (!Array.isArray(db.wipes)) db.wipes = [];
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
@@ -503,44 +506,60 @@ function publicSnapshot(): PublicBoard {
     roomMessages: db.roomMessages.filter((msg) => unlocked.has(String(msg.room_id)) && Number(msg.timestamp) >= (db.roomClearedAt || 0)).slice(-80),
     lots: db.listings.slice(0, 40).map((lot) => ({ ...lot, image: light(lot.image) as string | null })),
     captures: (db.captures || []).slice(-40),
+    wipes: db.wipes || [],
   };
 }
 
 function mergeBoard(remote: PublicBoard) {
   let changed = false;
+  for (const wipe of remote.wipes || []) {
+    const handle = String(wipe.handle || "");
+    const at = Number(wipe.at) || 0;
+    if (!handle || !at) continue;
+    const prior = (db.wipes || []).find((row) => sameHandle(row.handle, handle));
+    if (prior && prior.at >= at) continue;
+    eraseUser(handle, at);
+    changed = true;
+  }
   const add = (list: Array<{ id?: unknown }>, row: { id?: unknown }) => {
     if (!row || row.id === undefined || list.some((item) => String(item.id) === String(row.id))) return;
     list.push(row);
     changed = true;
   };
   for (const post of remote.posts || []) {
-    if (!post.id || !post.author_handle || typeof post.content !== "string") continue;
+    if (!post.id || !post.author_handle || typeof post.content !== "string" || wiped(post.author_handle, post.timestamp)) continue;
     add(db.posts, post as Post);
   }
   for (const msg of remote.chat || []) {
-    if (Number(msg.timestamp) < (db.roomClearedAt || 0)) continue;
+    if (Number(msg.timestamp) < (db.roomClearedAt || 0) || wiped(msg.sender_handle, msg.timestamp)) continue;
     add(db.openChatMessages, msg);
   }
   for (const room of remote.rooms || []) {
-    if (!room.id || db.chatRooms.some((item) => item.id === String(room.id))) continue;
+    if (!room.id || wiped(room.creator_handle, room.created_at) || db.chatRooms.some((item) => item.id === String(room.id))) continue;
     const { password: _password, ...rest } = room as Room;
     db.chatRooms.push({ ...rest, password: null });
     changed = true;
   }
   const unlocked = new Set(db.chatRooms.filter((room) => !room.is_locked).map((room) => room.id));
   for (const msg of remote.roomMessages || []) {
-    if (!unlocked.has(String(msg.room_id)) || Number(msg.timestamp) < (db.roomClearedAt || 0)) continue;
+    if (!unlocked.has(String(msg.room_id)) || Number(msg.timestamp) < (db.roomClearedAt || 0) || wiped(msg.sender_handle, msg.timestamp)) continue;
     add(db.roomMessages, msg);
   }
   for (const lot of remote.lots || []) {
     const incoming = lot as Listing;
+    if (wiped(incoming.seller, incoming.created_at)) continue;
     const local = db.listings.find((item) => item.id === incoming.id);
     if (!local) {
-      db.listings.push({ ...incoming, bids: incoming.bids || [], watchers: incoming.watchers || [] });
+      db.listings.push({
+        ...incoming,
+        bids: (incoming.bids || []).filter((bid) => !wiped(bid.bidder, bid.timestamp)),
+        watchers: (incoming.watchers || []).filter((name) => !wiped(name, incoming.created_at)),
+      });
       changed = true;
       continue;
     }
     for (const bid of incoming.bids || []) {
+      if (wiped(bid.bidder, bid.timestamp)) continue;
       if (!local.bids.some((item) => item.id === bid.id)) {
         local.bids.push(bid);
         changed = true;
@@ -654,6 +673,62 @@ function sameHandle(a: unknown, b: unknown) {
   return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 }
 
+function wiped(handle: unknown, when: unknown) {
+  const at = Number(when) || 0;
+  return (db.wipes || []).some((row) => sameHandle(row.handle, handle) && at <= row.at);
+}
+
+function eraseUser(handle: string, at: number) {
+  if (!handle) return;
+  if (!Array.isArray(db.wipes)) db.wipes = [];
+  const prior = db.wipes.find((row) => sameHandle(row.handle, handle));
+  if (prior) prior.at = Math.max(prior.at, at);
+  else db.wipes.push({ handle, at });
+  db.posts = db.posts.filter((post) => !((sameHandle(post.author, handle) || sameHandle(post.author_handle, handle)) && post.timestamp <= at));
+  db.listings = db.listings.filter((lot) => !(sameHandle(lot.seller, handle) && lot.created_at <= at));
+  for (const lot of db.listings) {
+    lot.bids = (lot.bids || []).filter((bid) => !(sameHandle(bid.bidder, handle) && bid.timestamp <= at));
+    lot.watchers = (lot.watchers || []).filter((name) => !sameHandle(name, handle));
+    if (sameHandle(lot.winner, handle) && (lot.ends_at || 0) <= at) lot.winner = null;
+  }
+  db.messages = db.messages.filter((msg) => !(sameHandle(msg.sender_handle, handle) && msg.timestamp <= at));
+  db.conversations = db.conversations.filter((conv) => db.messages.some((msg) => msg.conversation_id === conv.id) || (!sameHandle(conv.user1_handle, handle) && !sameHandle(conv.user2_handle, handle)));
+  db.openChatMessages = db.openChatMessages.filter((msg) => msg.sender_handle === "notice" || !(sameHandle(msg.sender_handle, handle) && Number(msg.timestamp) <= at));
+  db.roomMessages = db.roomMessages.filter((msg) => !(sameHandle(msg.sender_handle, handle) && Number(msg.timestamp) <= at));
+  const ownRooms = db.chatRooms.filter((room) => sameHandle(room.creator_handle, handle) && room.created_at <= at).map((room) => room.id);
+  db.chatRooms = db.chatRooms.filter((room) => !ownRooms.includes(room.id));
+  db.roomMessages = db.roomMessages.filter((msg) => !ownRooms.includes(String(msg.room_id)));
+  db.smsMessages = db.smsMessages.filter((msg) => !((sameHandle(msg.sender_handle, handle) || sameHandle(msg.recipient, handle)) && Number(msg.timestamp) <= at));
+  db.escrows = db.escrows.filter((row) => !((sameHandle(row.sender, handle) || sameHandle(row.recipient, handle)) && Number(row.created_at) <= at));
+  db.captures = (db.captures || []).filter((row) => !(sameHandle(row.handle, handle) && row.timestamp <= at));
+  for (const key of Object.keys(db.userSettings || {})) {
+    if (!sameHandle(key, handle)) continue;
+    const current = db.userSettings[key] || {};
+    db.userSettings[key] = {
+      wipeEnabled: current.wipeEnabled,
+      wipeDays: current.wipeDays,
+      wipeAt: current.wipeAt,
+      updated_at: at,
+    };
+  }
+}
+
+function wipeIfDue() {
+  const now = Date.now();
+  let changed = false;
+  for (const [handle, settings] of Object.entries(db.userSettings || {})) {
+    if (!settings?.wipeEnabled || !settings.wipeAt || now < Number(settings.wipeAt)) continue;
+    const days = Math.min(7, Math.max(1, Math.round(Number(settings.wipeDays) || 1)));
+    eraseUser(handle, now);
+    for (const key of Object.keys(db.userSettings)) {
+      if (!sameHandle(key, handle)) continue;
+      db.userSettings[key] = { wipeEnabled: true, wipeDays: days, wipeAt: now + days * 86400000, updated_at: now };
+    }
+    changed = true;
+  }
+  if (changed) save();
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -688,6 +763,7 @@ function viewPost(p: Post) {
 async function route(path: string, method: string, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   await ensureLoaded();
   clearRoomsIfDue();
+  wipeIfDue();
   const url = new URL(path, "http://local");
   const q = url.searchParams;
   const parts = url.pathname.split("/").filter(Boolean); // api, ...
@@ -763,9 +839,20 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   if (seg[0] === "settings" && seg[1] && method === "POST") {
     const handle = decodeURIComponent(seg[1]);
     const body = await readJson(input, init);
-    db.userSettings[handle] = { ...(db.userSettings[handle] || {}), ...body, updated_at: Date.now() };
+    delete body.wipeAt;
+    const prev = db.userSettings[handle] || {};
+    const next = { ...prev, ...body, updated_at: Date.now() };
+    if (body.wipeEnabled !== undefined || body.wipeDays !== undefined) {
+      const enabled = Boolean(body.wipeEnabled !== undefined ? body.wipeEnabled : prev.wipeEnabled);
+      const days = Math.min(7, Math.max(1, Math.round(Number(body.wipeDays !== undefined ? body.wipeDays : prev.wipeDays) || 1)));
+      const changed = enabled !== Boolean(prev.wipeEnabled) || days !== Number(prev.wipeDays);
+      next.wipeEnabled = enabled;
+      next.wipeDays = days;
+      next.wipeAt = enabled ? (changed || !prev.wipeAt ? Date.now() + days * 86400000 : Number(prev.wipeAt)) : 0;
+    }
+    db.userSettings[handle] = next;
     save();
-    return json({ success: true });
+    return json({ success: true, wipeEnabled: Boolean(next.wipeEnabled), wipeDays: Number(next.wipeDays) || 1, wipeAt: Number(next.wipeAt) || 0 });
   }
 
   if (seg[0] === "conversations" && seg.length === 1 && method === "GET") {

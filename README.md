@@ -105,6 +105,12 @@ The key that opens the message vault stays on the same device. It is not publish
 
 The public board is the exception. Open chats, unlocked rooms, posts, and auctions are readable by anyone using Omertà, because that board is public on purpose. Two phones still do not share passphrases or private threads.
 
+## Wipe
+
+In Settings, every handle can turn on Wipe my data. Choose 1 to 7 days. When that time is up, the app deletes that handle's messages, posts, auctions, bids, rooms they created, and the rest of their stored info. The handle and passphrase stay, so they can sign in again. If the switch is still on, the next wipe is set for the same number of days later. Turning it off cancels the countdown. Nothing is deleted when you turn it off.
+
+A wipe of public posts and auctions is shared, so other phones drop that older material too. Private messages are removed on the phone where they were stored.
+
 ## Install
 
 Omertà can be added to a phone home screen.
