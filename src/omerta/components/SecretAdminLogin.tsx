@@ -24,25 +24,35 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
   const { setUserRole, login } = useApp();
   const userRef = useRef<HTMLInputElement>(null);
   const passRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const busy = useRef(false);
   const [error, setError] = useState('');
 
-  const authenticate = async (e?: React.FormEvent) => {
+  const authenticate = async (e?: React.FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
     setError("");
-    const username = (userRef.current?.value || "").trim().toLowerCase();
-    const password = (passRef.current?.value || "").trim();
-    const hashed = await digest(password);
-    const match = doors.find((row) => row[0] === username && row[1] === hashed);
-    if (!match) {
+    const form = e?.currentTarget || formRef.current;
+    const data = form ? new FormData(form) : null;
+    const username = String(data?.get("username") || userRef.current?.value || "").trim().toLowerCase();
+    const password = String(data?.get("passphrase") ?? passRef.current?.value ?? "").trim();
+    try {
+      const hashed = await digest(password);
+      const match = doors.find((row) => row[0] === username && row[1] === hashed);
+      if (!match) {
+        setError("// INVALID CREDENTIALS //");
+        return;
+      }
+      setUserRole(match[2]);
+      login(match[3]);
+      onClose();
+      void grantLocalRole(match[3], match[2]).catch(() => {});
+    } catch {
       setError("// INVALID CREDENTIALS //");
-      return;
+    } finally {
+      busy.current = false;
     }
-    setUserRole(match[2]);
-    await grantLocalRole(match[3], match[2]);
-    login(match[3]);
-    if (userRef.current) userRef.current.value = "";
-    if (passRef.current) passRef.current.value = "";
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -58,7 +68,7 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
           <button type="button" onClick={onClose} className="font-mono text-xs px-2 py-1 rounded border" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }}><X size={16} /></button>
         </div>
         <p className="font-mono text-[10px] tracking-wider mb-4" style={{ color: "hsl(var(--muted-foreground))" }}>// SYSTEM ADMINISTRATOR LOGIN //</p>
-        <form onSubmit={authenticate} className="space-y-4">
+        <form ref={formRef} onSubmit={authenticate} className="space-y-4">
           <div>
             <label className="block font-mono text-[10px] uppercase tracking-wider mb-1" style={{ color: "hsl(var(--muted-foreground))" }}>Username</label>
             <input
@@ -94,7 +104,8 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
             <p className="font-mono text-xs text-center" style={{ color: "hsl(var(--destructive))" }}>{error}</p>
           )}
           <button
-            type="submit"
+            type="button"
+            onClick={() => void authenticate()}
             className="w-full py-3 font-mono text-xs uppercase tracking-wider rounded-md"
             style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}
           >
