@@ -479,6 +479,16 @@ function ToggleRow({ item, onToggle, accent = false }: { item: ToggleSetting; on
   );
 }
 
+function countdown(ms: number) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return (days > 0 ? days + "d " : "") + pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+}
+
 function DataWipe() {
   const { userHandle } = useApp();
   const [enabled, setEnabled] = useState(false);
@@ -486,6 +496,27 @@ function DataWipe() {
   const [wipeAt, setWipeAt] = useState(0);
   const [notice, setNotice] = useState("");
   const [confirmDays, setConfirmDays] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!enabled || wipeAt <= 0) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [enabled, wipeAt]);
+
+  useEffect(() => {
+    if (!enabled || wipeAt <= 0 || now < wipeAt || !userHandle) return;
+    let dead = false;
+    fetch(`/api/settings/${encodeURIComponent(userHandle)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (dead) return;
+        setEnabled(Boolean(data.wipeEnabled));
+        setWipeAt(Number(data.wipeAt) || 0);
+      })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, [enabled, wipeAt, now >= wipeAt, userHandle]);
 
   useEffect(() => {
     if (!userHandle) return;
@@ -519,8 +550,8 @@ function DataWipe() {
           <h3 className="font-mono text-sm" style={{ color: "hsl(var(--foreground))" }}>Dead man's switch</h3>
           <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>Turn this on and choose 1 to 7 days. When the time is up, your messages, posts, auctions, and the rest of your stored info are deleted. Your handle stays.</p>
         </div>
-        <button type="button" onClick={() => enabled ? void save(false, days) : setConfirmDays(days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
-          {enabled ? "On" : "Off"}
+        <button type="button" onClick={() => enabled ? void save(false, days) : setConfirmDays(days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border whitespace-nowrap" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
+          {enabled && wipeAt > now ? countdown(wipeAt - now) : enabled ? "On" : "Off"}
         </button>
       </div>
       <div className="flex gap-2 mt-3">
