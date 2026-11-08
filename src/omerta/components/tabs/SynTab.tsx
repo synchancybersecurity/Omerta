@@ -11,14 +11,13 @@ interface HistoryEntry {
 
 const WELCOME = [
   '// SYN v1.0 // TERMINAL ACCESS //',
-  '// MODERATOR / ADMIN SHELL //',
   '// HOST: ANDROID (TERMUX) //',
   'Commands execute on the server device.',
   '',
 ];
 
 export default function SynTab() {
-  const { userRole } = useApp();
+  const { userRole, userHandle } = useApp();
   const [history, setHistory] = useState<HistoryEntry[]>(
     WELCOME.map((line, i) => ({ id: i, type: 'system' as const, text: line, timestamp: 0 }))
   );
@@ -31,9 +30,8 @@ export default function SynTab() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = userRole === 'admin';
-  const isMod = userRole === 'moderator';
-  const canAccess = isAdmin || isMod;
+  const isAdmin = userRole === 'admin' && userHandle.trim().toLowerCase() === 'flint';
+  const canAccess = isAdmin;
 
   const addEntry = useCallback((type: HistoryEntry['type'], text: string) => {
     const id = nextId.current++;
@@ -53,7 +51,7 @@ export default function SynTab() {
       const res = await fetch('/api/syn/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd.trim() }),
+        body: JSON.stringify({ command: cmd.trim(), handle: userHandle }),
       });
       const data = await res.json();
       if (data.error) {
@@ -123,7 +121,7 @@ export default function SynTab() {
       <div className="h-full flex flex-col items-center justify-center px-4" style={{ background: 'hsl(var(--background))' }}>
         <Lock size={48} style={{ color: 'hsl(var(--muted))' }} className="mb-4" />
         <h2 className="font-serif text-xl tracking-wider mb-2" style={{ color: 'hsl(var(--foreground))' }}>// ACCESS DENIED //</h2>
-        <p className="font-mono text-xs text-center" style={{ color: 'hsl(var(--muted-foreground))' }}>Syn terminal requires moderator or administrator privileges.</p>
+        <p className="font-mono text-xs text-center" style={{ color: 'hsl(var(--muted-foreground))' }}>Syn terminal is closed.</p>
       </div>
     );
   }

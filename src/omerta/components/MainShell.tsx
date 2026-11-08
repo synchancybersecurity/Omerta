@@ -37,16 +37,17 @@ function NotificationBadge({ count }: { count: number }) {
 
 export default function MainShell() {
   const {
-    logout, userRole,
+    logout, userRole, userHandle,
     unreadCounts, activeTab, setActiveTab, setViewingProfile,
     requestNotificationPermission,
   } = useApp();
   const isAdmin = userRole === 'admin';
   const isModerator = userRole === 'moderator';
+  const canUseSyn = isAdmin && userHandle.trim().toLowerCase() === 'flint';
 
   const TABS = [
     ...BASE_TABS,
-    ...(isAdmin || isModerator ? [{ id: 'syn', label: 'Syn', icon: Terminal }] : []),
+    ...(canUseSyn ? [{ id: 'syn', label: 'Syn', icon: Terminal }] : []),
   ];
 
   const renderTab = () => {
@@ -59,7 +60,7 @@ export default function MainShell() {
       case 'escrow': return <EscrowTab />;
       case 'mrkt': return <MrktTab />;
       case 'settings': return <SettingsTab />;
-      case 'syn': return <SynTab />;
+      case 'syn': return canUseSyn ? <SynTab /> : <ProfileTab mode="own" />;
       default: return <ProfileTab />;
     }
   };

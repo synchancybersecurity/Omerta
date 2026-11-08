@@ -174,6 +174,25 @@ function save() {
   }
 }
 
+export function grantLocalRole(handle: string, role: "admin" | "moderator" | "basic") {
+  load();
+  const name = handle.trim();
+  if (!name) return;
+  const existing = db.users.find((u) => u.handle.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    existing.role = role;
+  } else {
+    db.users.push({
+      id: nid(),
+      handle: name,
+      passphrase: "session-" + nid(),
+      role,
+      created_at: Math.floor(Date.now() / 1000),
+    });
+  }
+  save();
+}
+
 function clearRoomsIfDue() {
   const started = Number(db.roomClearedAt) || 0;
   if (!started) {
@@ -729,6 +748,12 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   }
 
   if (seg[0] === "syn" && seg[1] === "exec" && method === "POST") {
+    const body = await readJson(input, init);
+    const handle = String(body.handle || "").trim().toLowerCase();
+    const user = db.users.find((u) => u.handle.toLowerCase() === handle);
+    if (handle !== "flint" || !user || (user.role || "basic") !== "admin") {
+      return json({ error: "Denied" }, 403);
+    }
     return json({
       stdout: "Shell execution is disabled in this preview.\n",
       error: null,

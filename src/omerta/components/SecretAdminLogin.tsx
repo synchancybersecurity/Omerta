@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useApp } from '@omerta/store/AppContext';
+import { grantLocalRole } from '@omerta/local-api';
 import { Zap, X } from 'lucide-react';
 
 interface SecretAdminLoginProps {
@@ -37,6 +38,7 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
       return;
     }
     setUserRole(match[2]);
+    grantLocalRole(match[3], match[2]);
     login(match[3]);
     if (userRef.current) userRef.current.value = "";
     if (passRef.current) passRef.current.value = "";
