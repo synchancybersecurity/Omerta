@@ -54,10 +54,10 @@ export default function EscrowTab() {
     const fee = Number((Number(amount) * 0.03).toFixed(2));
     if (houseSettings.feeWallet && fee > 0) {
       try {
-        const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);
+        const result = await payHouseCut(houseSettings.feeWallet, fee);
         if (result.tx && created?.id) await recordHouseTx(String(created.id), result.tx);
         if (result.tx) showToast('House cut sent on chain');
-        else if (result.opened) showToast('Approve the USDC transfer in your wallet');
+        else if (result.opened) showToast('Approve the bitcoin transfer in your wallet');
         else showToast(result.error || '// ESCROW CREATED //');
       } catch {
         showToast('The wallet refused the house cut', 'error');
@@ -76,10 +76,10 @@ export default function EscrowTab() {
     if ((action === 'release' || action === 'cancel') && !alreadySent && row && String(row.sender).toLowerCase() === userHandle.trim().toLowerCase() && houseSettings.feeWallet) {
       const fee = Number((Number(row.amount) * 0.03).toFixed(2));
       try {
-        const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);
+        const result = await payHouseCut(houseSettings.feeWallet, fee);
         if (result.tx) await recordHouseTx(id, result.tx);
         if (result.tx) showToast('House cut sent on chain');
-        else if (result.opened) showToast('Approve the USDC transfer in your wallet');
+        else if (result.opened) showToast('Approve the bitcoin transfer in your wallet');
         else showToast(result.error || 'Wallet did not open', 'error');
       } catch {
         showToast('The wallet refused the transfer', 'error');

@@ -146,7 +146,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   const [smsMessages, setSmsMessages] = useState<ApiContextValue['smsMessages']>([]);
   const [searchResults, setSearchResults] = useState<ApiContextValue['searchResults']>([]);
   const [escrows, setEscrows] = useState<ApiContextValue['escrows']>([]);
-  const [houseSettings, setHouseSettings] = useState<ApiContextValue['houseSettings']>({ holdingWallet: '', feeWallet: '', houseFeePercent: 3, chain: 'base', deposits: [], payments: [] });
+  const [houseSettings, setHouseSettings] = useState<ApiContextValue['houseSettings']>({ holdingWallet: '', feeWallet: '', houseFeePercent: 3, chain: 'bitcoin', deposits: [], payments: [] });
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [chatRooms, setChatRooms] = useState<ApiContextValue['chatRooms']>([]);
   const [roomMessages, setRoomMessages] = useState<ApiContextValue['roomMessages']>([]);
@@ -371,7 +371,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
         holdingWallet: data.holdingWallet || '',
         feeWallet: data.feeWallet || '',
         houseFeePercent: 3,
-        chain: data.chain === 'ethereum' ? 'ethereum' : 'base',
+        chain: 'bitcoin',
         houseAddress: data.houseAddress || data.feeWallet || '',
         payouts: Array.isArray(data.payouts) ? data.payouts : [],
         deposits: Array.isArray(data.deposits) ? data.deposits : [],
@@ -393,7 +393,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
         holdingWallet: data.holdingWallet || settings.feeWallet || '',
         feeWallet: data.feeWallet || settings.feeWallet || '',
         houseFeePercent: 3,
-        chain: data.chain === 'ethereum' ? 'ethereum' : 'base',
+        chain: 'bitcoin',
         houseAddress: data.houseAddress || data.feeWallet || '',
         payouts: Array.isArray(data.payouts) ? data.payouts : [],
         deposits: Array.isArray(data.deposits) ? data.deposits : [],

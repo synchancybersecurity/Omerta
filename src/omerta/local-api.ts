@@ -1,6 +1,6 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
-import { createHouseWallet, exportHouseUsdc, isEvmAddress, restoreHouseWallet } from "@omerta/chain";
+import { asBitcoinWallet, createHouseWallet, exportHouseBtc, isBtcAddress, restoreHouseWallet } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
 
@@ -136,7 +136,7 @@ function creditHouse(source: "auction" | "escrow", sourceId: string, gross: numb
     wallet,
     timestamp: Date.now(),
   });
-  if (isEvmAddress(wallet)) {
+  if (isBtcAddress(wallet)) {
     db.chainPayments.unshift({
       id: "pay" + nid(),
       source,
@@ -155,11 +155,14 @@ function creditHouse(source: "auction" | "escrow", sourceId: string, gross: numb
 
 function ensureHouseWallet() {
   const previous = (db.houseSettings?.feeWallet || "").trim();
-  if (!db.houseWallet?.address || !db.houseWallet?.key) {
+  if (!db.houseWallet?.key && !db.houseWallet?.phrase) {
     db.houseWallet = createHouseWallet();
+  } else if (db.houseWallet) {
+    db.houseWallet = asBitcoinWallet(db.houseWallet);
   }
+  if (!db.houseWallet) db.houseWallet = createHouseWallet();
   if (!Array.isArray(db.payoutWallets)) db.payoutWallets = [];
-  if (isEvmAddress(previous) && previous.toLowerCase() !== db.houseWallet.address.toLowerCase()) {
+  if (isBtcAddress(previous) && previous.toLowerCase() !== db.houseWallet.address.toLowerCase()) {
     if (!db.payoutWallets.some((item) => item.toLowerCase() === previous.toLowerCase())) db.payoutWallets.push(previous);
   }
   db.houseSettings.feeWallet = db.houseWallet.address;
@@ -291,7 +294,7 @@ function emptyDb(): Db {
       },
     ],
     roomClearedAt: now,
-    houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3, chain: "base" },
+    houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3, chain: "bitcoin" },
     houseDeposits: [],
     chainPayments: [],
     houseWallet: null,
@@ -328,7 +331,7 @@ async function loadAsync() {
     if (raw) {
       const json = isSealed(raw) ? await openVault(raw) : raw;
       db = { ...emptyDb(), ...JSON.parse(json) };
-      db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: db.houseSettings?.chain || "base" };
+      db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: "bitcoin" };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
       if (!Array.isArray(db.payoutWallets)) db.payoutWallets = [];
@@ -689,11 +692,11 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const actor = String(body.actor || "").trim();
     if (!isHouseAdmin(actor)) return json({ error: "Only an admin can change the house wallet" }, 403);
     ensureHouseWallet();
-    db.houseSettings.chain = body.chain === "ethereum" ? "ethereum" : "base";
+    db.houseSettings.chain = "bitcoin";
     db.houseSettings.houseFeePercent = 3;
     const payout = String(body.payout || "").trim();
     if (payout) {
-      if (!isEvmAddress(payout)) return json({ error: "That payout address is not a 0x address" }, 400);
+      if (!isBtcAddress(payout)) return json({ error: "That payout address is not a bitcoin address" }, 400);
       if (payout.toLowerCase() !== db.houseWallet!.address.toLowerCase() && !db.payoutWallets.some((item) => item.toLowerCase() === payout.toLowerCase())) {
         db.payoutWallets.push(payout);
       }
@@ -710,7 +713,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const amount = body.amount === undefined || body.amount === "" ? undefined : Number(body.amount);
     if (amount !== undefined && !Number.isFinite(amount)) return json({ error: "Enter an amount" }, 400);
     try {
-      const tx = await exportHouseUsdc(wallet.key, db.houseSettings.chain || "base", to, amount);
+      const tx = await exportHouseBtc(wallet.key, to, amount);
       save();
       return json({ success: true, tx });
     } catch (err) {

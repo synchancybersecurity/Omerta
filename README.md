@@ -67,15 +67,15 @@ Anyone else on the device may bid, buy the lot outright when buy now is offered,
 
 Escrow holds an amount between two handles. It can be released, disputed, refunded, or cancelled.
 
-The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not give that cut back. The rate is fixed.
+The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not give that cut back. The rate is fixed. The books still show the fee in dollars. The coins themselves are bitcoin.
 
-Those fees are booked to a house wallet that the app creates on the phone. When a payer approves the transfer, the 3 percent is sent as USDC on Base or on Ethereum, whichever chain the house is using. The payer still has to approve it in their own wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed.
+When a payer approves the transfer, that dollar amount is converted at the current bitcoin price and sent to the house wallet. The payer still has to approve it in their own bitcoin wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed. A cut smaller than the bitcoin dust limit stays on the books until it can be sent.
 
-An administrator can enter one or more payout addresses and export some or all of the USDC from the house wallet to an address they choose. Leave the amount blank to export the whole balance. The house wallet needs a little ETH on that chain to pay the network fee for the export.
+An administrator can enter one or more bitcoin addresses and export some or all of the bitcoin from the house wallet. Leave the amount blank to export the whole balance. A little bitcoin is kept back to pay the network fee.
 
 ## Recovery
 
-In House Escrow, an administrator can show the recovery phrase and write it down somewhere that is not the phone. After the app is wiped, sign in as an administrator and paste that phrase into Restore house wallet. The same address comes back, and the coins that were already on the chain can be exported again.
+In House Escrow, an administrator can show the recovery phrase and write it down somewhere that is not the phone. After the app is wiped, sign in as an administrator and paste that phrase into Restore house wallet. The same bitcoin address comes back, and the bitcoin that was already there can be exported again.
 
 The phrase does not bring back messages, posts, rooms, or files. Those live only in the vault on the phone where they were written. A wallet created before phrases existed shows a recovery key instead of twelve words. That key restores the same way.
 
@@ -85,7 +85,7 @@ The browser vault is encrypted with AES 256 GCM before it is written to device s
 
 The key that opens the message vault stays on the same device. It is not published in this repository, and the house recovery phrase does not open it. Clearing the browser site data removes the vault. There is no way to fetch those messages from another machine.
 
-The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one. The house coins are the exception: they sit on the chain, and the recovery phrase can point a phone at that same wallet.
+The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one. The house bitcoin is the exception: it sits on the Bitcoin network, and the recovery phrase can point a phone at that same wallet.
 
 ## Install
 

@@ -65,7 +65,6 @@ function DropdownSection({ title, subtitle, icon: Icon, children, defaultOpen = 
 function HouseEscrowSettings() {
   const { userHandle, userRole } = useApp();
   const { houseSettings, fetchHouseSettings, saveHouseSettings } = useApi();
-  const [chain, setChain] = useState(houseSettings.chain || "base");
   const [payout, setPayout] = useState("");
   const [amount, setAmount] = useState("");
   const [saved, setSaved] = useState(false);
@@ -77,13 +76,12 @@ function HouseEscrowSettings() {
   const houseAddress = houseSettings.houseAddress || houseSettings.feeWallet;
 
   useEffect(() => { fetchHouseSettings(); }, [fetchHouseSettings]);
-  useEffect(() => { setChain(houseSettings.chain || "base"); }, [houseSettings.chain]);
 
   const collected = (houseSettings.deposits || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const pending = (houseSettings.payments || []).filter((row) => row.status !== "sent");
 
   const handleSave = async () => {
-    const result = await saveHouseSettings({ chain, payout, actor: userHandle });
+    const result = await saveHouseSettings({ chain: "bitcoin", payout, actor: userHandle });
     if (result && result.error) {
       setNotice(result.error);
       return;
@@ -98,8 +96,8 @@ function HouseEscrowSettings() {
     setNotice("");
     setBalance("");
     try {
-      const result = await readHouseBalance(chain, houseAddress);
-      setBalance(result.chain + " is connected. The house wallet holds " + result.usdc.toFixed(2) + " USDC.");
+      const result = await readHouseBalance(houseAddress);
+      setBalance("Bitcoin is connected. The house wallet holds " + result.btc.toFixed(8) + " BTC.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "The chain did not answer");
     }
@@ -107,7 +105,7 @@ function HouseEscrowSettings() {
 
   const sendCut = async (row: { id: string; amount: number; wallet: string; chain: string }) => {
     try {
-      const result = await payHouseCut(row.chain || chain, row.wallet || houseAddress, row.amount);
+      const result = await payHouseCut(row.wallet || houseAddress, row.amount);
       if (result.tx) {
         await fetch("/api/house/payments/" + row.id + "/sent", {
           method: "POST",
@@ -117,7 +115,7 @@ function HouseEscrowSettings() {
         setBalance("Sent " + result.tx);
         fetchHouseSettings();
       } else if (result.opened) {
-        setBalance("Approve the USDC transfer in your wallet.");
+        setBalance("Approve the bitcoin transfer in your wallet.");
       } else {
         setNotice(result.error || "The wallet did not open");
       }
@@ -179,7 +177,7 @@ function HouseEscrowSettings() {
   return (
     <div className="space-y-4 pt-2">
       <p className="font-mono text-[10px] leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>
-        Fees gather in the house wallet on this phone. Write down the recovery phrase. After a wipe, an admin can enter the same phrase and the coins come back. An admin can also export them to any address entered below. The house wallet needs a little ETH on the chosen chain to pay the network fee.
+        Fees are booked in dollars and collected in bitcoin. Write down the recovery phrase. After a wipe, an admin can enter the same phrase and the bitcoin comes back. An admin can also export it to any bitcoin address entered below. A little bitcoin must remain for the network fee.
       </p>
       <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
         <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>House wallet</span>
@@ -187,13 +185,7 @@ function HouseEscrowSettings() {
         <p className="font-mono text-lg mt-2" style={{ color: "hsl(var(--primary))" }}>${collected.toFixed(2)} booked</p>
         {balance && <p className="font-mono text-[10px] mt-2 break-all" style={{ color: "hsl(var(--foreground))" }}>{balance}</p>}
       </div>
-      <div>
-        <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 block" style={{ color: "hsl(var(--muted-foreground))" }}>Chain</label>
-        <select value={chain} disabled={!isAdmin} onChange={(e) => setChain(e.target.value)} className="w-full p-2.5 rounded-md font-mono text-xs" style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}>
-          <option value="base">Base</option>
-          <option value="ethereum">Ethereum</option>
-        </select>
-      </div>
+      <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Bitcoin</p>
       {isAdmin && (
         <>
           <div>
@@ -204,7 +196,7 @@ function HouseEscrowSettings() {
               type="text"
               value={payout}
               onChange={e => setPayout(e.target.value)}
-              placeholder="0x address to receive an export"
+              placeholder="bc1 address to receive an export"
               className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none"
               style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}
             />
@@ -214,7 +206,7 @@ function HouseEscrowSettings() {
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="USDC to export, or leave blank for all"
+            placeholder="BTC to export, or leave blank for all"
             className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none"
             style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}
           />
@@ -258,7 +250,7 @@ function HouseEscrowSettings() {
       ))}
       {pending.map((row) => (
         <div key={row.id} className="flex items-center justify-between gap-2 font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
-          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {row.amount.toFixed(2)} USDC</span>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · ${row.amount.toFixed(2)} in BTC</span>
           <button type="button" onClick={() => void sendCut(row)} className="px-2 py-1 uppercase" style={{ color: "hsl(var(--primary))" }}>Send</button>
         </div>
       ))}
@@ -329,7 +321,7 @@ function AdminEscrowOversight() {
           )}
           {houseSettings.feeWallet && (
             <div className="flex justify-between font-mono text-[10px]">
-              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Fee</span>
+              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Bitcoin</span>
               <span className="truncate max-w-[200px]" style={{ color: 'hsl(var(--primary))' }}>{houseSettings.feeWallet}</span>
             </div>
           )}

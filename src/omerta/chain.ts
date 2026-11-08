@@ -1,105 +1,153 @@
-import { Contract, JsonRpcProvider, Wallet } from "ethers";
+import { HDKey } from "@scure/bip32";
+import { mnemonicToSeedSync } from "@scure/bip39";
+import { Address, NETWORK, Transaction, getAddress, p2wpkh } from "@scure/btc-signer";
+import { pubECDSA } from "@scure/btc-signer/utils.js";
+import { Wallet } from "ethers";
 
-export const CHAINS = {
-  base: {
-    id: 8453,
-    hex: "0x2105",
-    name: "Base",
-    rpc: "https://base.publicnode.com",
-    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    explorer: "https://basescan.org",
-  },
-  ethereum: {
-    id: 1,
-    hex: "0x1",
-    name: "Ethereum",
-    rpc: "https://ethereum.publicnode.com",
-    usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    explorer: "https://etherscan.io",
-  },
-} as const;
+const MEMPOOL = "https://mempool.space/api";
 
-export type ChainName = keyof typeof CHAINS;
-
-type WalletProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-};
-
-export function isEvmAddress(value: string) {
-  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+export function isBtcAddress(value: string) {
+  const text = value.trim();
+  if (!/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(text)) return false;
+  try {
+    Address(NETWORK).decode(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-function chainOf(name: string) {
-  return CHAINS[(name || "base") as ChainName] || CHAINS.base;
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function rpc(url: string, method: string, params: unknown[]) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message || "The chain refused the call");
-  return data.result as string;
+function hexToBytes(value: string) {
+  const clean = value.replace(/^0x/, "");
+  if (!/^[a-f0-9]{64}$/i.test(clean)) throw new Error("That recovery key is not valid");
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) out[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  return out;
 }
 
-export async function readHouseBalance(chainName: string, wallet: string) {
-  const chain = chainOf(chainName);
-  if (!isEvmAddress(wallet)) throw new Error("The house wallet must be a 0x address");
-  const data = "0x70a08231" + wallet.slice(2).toLowerCase().padStart(64, "0");
-  const [raw, chainId] = await Promise.all([
-    rpc(chain.rpc, "eth_call", [{ to: chain.usdc, data }, "latest"]),
-    rpc(chain.rpc, "eth_chainId", []),
-  ]);
-  return { chain: chain.name, chainId, usdc: Number(BigInt(raw)) / 1e6 };
+function accountFromKey(privateKey: Uint8Array, phrase = "") {
+  const address = getAddress("wpkh", privateKey);
+  if (!address) throw new Error("The bitcoin address could not be made");
+  return { address, key: bytesToHex(privateKey), phrase };
 }
 
-function transferData(wallet: string, amount: number) {
-  const units = BigInt(Math.round(amount * 1_000_000));
-  const pad = (hex: string) => hex.replace(/^0x/i, "").padStart(64, "0");
-  return { units, data: "0xa9059cbb" + pad(wallet) + pad(units.toString(16)) };
+function accountFromPhrase(phrase: string) {
+  const seed = mnemonicToSeedSync(phrase);
+  const node = HDKey.fromMasterSeed(seed).derive("m/84'/0'/0'/0/0");
+  if (!node.privateKey) throw new Error("The recovery phrase did not produce a key");
+  return accountFromKey(node.privateKey, phrase);
 }
 
 export function createHouseWallet() {
-  const wallet = Wallet.createRandom();
-  return { address: wallet.address, key: wallet.privateKey, phrase: wallet.mnemonic?.phrase || "" };
+  const phrase = Wallet.createRandom().mnemonic?.phrase || "";
+  if (!phrase) throw new Error("The recovery phrase could not be made");
+  return accountFromPhrase(phrase);
 }
 
 export function restoreHouseWallet(secret: string) {
   const text = secret.trim().toLowerCase().replace(/\s+/g, " ");
-  if (/^0x[a-f0-9]{64}$/.test(text)) {
-    const wallet = new Wallet(text);
-    return { address: wallet.address, key: wallet.privateKey, phrase: "" };
-  }
-  const wallet = Wallet.fromPhrase(text);
-  return { address: wallet.address, key: wallet.privateKey, phrase: wallet.mnemonic?.phrase || text };
+  if (/^(0x)?[a-f0-9]{64}$/.test(text)) return accountFromKey(hexToBytes(text));
+  Wallet.fromPhrase(text);
+  return accountFromPhrase(text);
 }
 
-export async function exportHouseUsdc(key: string, chainName: string, to: string, amount?: number) {
-  const chain = chainOf(chainName);
-  if (!isEvmAddress(to)) throw new Error("That payout address is not a 0x address");
-  const provider = new JsonRpcProvider(chain.rpc);
-  const wallet = new Wallet(key, provider);
-  const usdc = new Contract(
-    chain.usdc,
-    ["function balanceOf(address) view returns (uint256)", "function transfer(address to, uint256 amount) returns (bool)"],
-    wallet,
-  );
-  const balance = (await usdc.balanceOf(wallet.address)) as bigint;
-  const units = amount && amount > 0 ? BigInt(Math.round(amount * 1_000_000)) : balance;
-  if (units <= 0n) throw new Error("The house wallet has no USDC to export");
-  if (units > balance) throw new Error("The house wallet does not hold that much USDC");
+export function asBitcoinWallet(wallet: { address: string; key: string; phrase?: string }) {
+  if (wallet.phrase) return accountFromPhrase(wallet.phrase);
+  if (wallet.key) return accountFromKey(hexToBytes(wallet.key));
+  return createHouseWallet();
+}
+
+async function btcPrice() {
+  const res = await fetch(MEMPOOL + "/v1/prices");
+  if (!res.ok) throw new Error("The bitcoin price did not load");
+  const data = await res.json();
+  const usd = Number(data.USD);
+  if (!(usd > 0)) throw new Error("The bitcoin price did not load");
+  return usd;
+}
+
+export async function readHouseBalance(address: string) {
+  if (!isBtcAddress(address)) throw new Error("The house wallet is not a bitcoin address");
+  const res = await fetch(MEMPOOL + "/address/" + address);
+  if (!res.ok) throw new Error("Bitcoin did not answer");
+  const data = await res.json();
+  const confirmed = Number(data.chain_stats?.funded_txo_sum || 0) - Number(data.chain_stats?.spent_txo_sum || 0);
+  const pending = Number(data.mempool_stats?.funded_txo_sum || 0) - Number(data.mempool_stats?.spent_txo_sum || 0);
+  return { chain: "Bitcoin", btc: (confirmed + pending) / 1e8 };
+}
+
+export async function payHouseCut(address: string, usd: number): Promise<{ tx?: string; opened?: boolean; error?: string; btc?: number }> {
+  if (!isBtcAddress(address)) return { error: "The house wallet is not a bitcoin address" };
+  if (!(usd > 0)) return { error: "Nothing to send" };
   try {
-    const tx = await usdc.transfer(to, units);
-    return String(tx.hash);
+    const price = await btcPrice();
+    const btc = usd / price;
+    const sats = Math.round(btc * 1e8);
+    if (sats < 546) return { error: "That cut is below the bitcoin dust limit. It stays on the books." };
+    const amount = (sats / 1e8).toFixed(8);
+    window.location.href = `bitcoin:${address}?amount=${amount}`;
+    return { opened: true, btc: sats / 1e8 };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "The export was refused";
-    if (/insufficient funds/i.test(message)) {
-      throw new Error("The house wallet needs a little ETH on this chain before it can export");
-    }
-    throw new Error(message);
+    return { error: err instanceof Error ? err.message : "The bitcoin price could not be read" };
   }
+}
+
+type Utxo = { txid: string; vout: number; value: number; status?: { confirmed?: boolean } };
+
+export async function exportHouseBtc(key: string, to: string, amount?: number) {
+  if (!isBtcAddress(to)) throw new Error("That payout address is not a bitcoin address");
+  const privateKey = hexToBytes(key);
+  const from = getAddress("wpkh", privateKey);
+  if (!from) throw new Error("The house wallet is not a bitcoin address");
+  const [utxoRes, feeRes] = await Promise.all([
+    fetch(MEMPOOL + "/address/" + from + "/utxo"),
+    fetch(MEMPOOL + "/v1/fees/recommended"),
+  ]);
+  if (!utxoRes.ok || !feeRes.ok) throw new Error("Bitcoin did not answer");
+  const utxos = ((await utxoRes.json()) as Utxo[]).filter((item) => item.status?.confirmed);
+  const fees = await feeRes.json();
+  const rate = BigInt(Math.max(1, Number(fees.halfHourFee) || 2));
+  if (!utxos.length) throw new Error("The house wallet has no confirmed bitcoin yet");
+  const spend = p2wpkh(pubECDSA(privateKey));
+  const selected: Utxo[] = [];
+  let total = 0n;
+  const requested = amount && amount > 0 ? BigInt(Math.round(amount * 1e8)) : 0n;
+  for (const utxo of utxos.sort((a, b) => b.value - a.value)) {
+    selected.push(utxo);
+    total += BigInt(utxo.value);
+    const fee = (BigInt(selected.length) * 68n + 62n) * rate;
+    if (!requested || total >= requested + fee) break;
+  }
+  const fee = (BigInt(selected.length) * 68n + (requested ? 93n : 31n)) * rate;
+  const send = requested || (total > fee ? total - fee : 0n);
+  if (send < 546n) throw new Error("The house wallet does not hold enough bitcoin to export");
+  if (total < send + fee) throw new Error("The house wallet does not hold enough bitcoin to cover the network fee");
+  const change = total - send - fee;
+  const tx = new Transaction();
+  for (const utxo of selected) {
+    tx.addInput({
+      txid: utxo.txid,
+      index: utxo.vout,
+      witnessUtxo: { script: spend.script, amount: BigInt(utxo.value) },
+    });
+  }
+  tx.addOutputAddress(to, send, NETWORK);
+  if (change > 546n) tx.addOutputAddress(from, change, NETWORK);
+  tx.sign(privateKey);
+  tx.finalize();
+  const raw = tx.hex;
+  const sent = await fetch(MEMPOOL + "/tx", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: raw,
+  });
+  const body = await sent.text();
+  if (!sent.ok) throw new Error(body || "The export was refused");
+  return body.trim();
 }
 
 export async function recordHouseTx(sourceId: string, tx: string) {
@@ -112,39 +160,4 @@ export async function recordHouseTx(sourceId: string, tx: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tx }),
   });
-}
-
-export async function payHouseCut(chainName: string, wallet: string, amount: number) {
-  const chain = chainOf(chainName);
-  if (!isEvmAddress(wallet)) return { error: "The house wallet is not a 0x address" };
-  if (!(amount > 0)) return { error: "Nothing to send" };
-  const { units, data } = transferData(wallet, amount);
-  const ethereum = (window as Window & { ethereum?: WalletProvider }).ethereum;
-  if (ethereum) {
-    const accounts = (await ethereum.request({ method: "eth_requestAccounts" })) as string[];
-    try {
-      await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: chain.hex }] });
-    } catch (err) {
-      const code = (err as { code?: number }).code;
-      if (code === 4902) {
-        await ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: chain.hex,
-            chainName: chain.name,
-            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-            rpcUrls: [chain.rpc],
-            blockExplorerUrls: [chain.explorer],
-          }],
-        });
-      }
-    }
-    const tx = await ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{ from: accounts[0], to: chain.usdc, data, value: "0x0" }],
-    });
-    return { tx: String(tx) };
-  }
-  window.location.href = `ethereum:${chain.usdc}@${chain.id}/transfer?address=${wallet}&uint256=${units.toString()}`;
-  return { opened: true };
 }
