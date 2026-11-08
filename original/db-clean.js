@@ -1,10 +1,9 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readStore, writeStore } from "./aes.js";
 
-const DB_PATH = './omerta.json';
+const DB_PATH = "./omerta.json";
 
 function loadDb() {
-  if (!existsSync(DB_PATH)) return { users: [], conversations: [], messages: [], openChatMessages: [], posts: [], smsMessages: [], userSettings: {}, escrows: [] };
-  const data = JSON.parse(readFileSync(DB_PATH, 'utf8'));
+  const data = readStore(DB_PATH, { users: [], conversations: [], messages: [], openChatMessages: [], posts: [], smsMessages: [], userSettings: {}, escrows: [] });
   if (!data.smsMessages) data.smsMessages = [];
   if (!data.userSettings) data.userSettings = {};
   if (!data.escrows) data.escrows = [];
@@ -12,7 +11,7 @@ function loadDb() {
 }
 
 function saveDb(db) {
-  writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  writeStore(DB_PATH, db);
 }
 
 let db = loadDb();

@@ -38,7 +38,7 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
       return;
     }
     setUserRole(match[2]);
-    grantLocalRole(match[3], match[2]);
+    await grantLocalRole(match[3], match[2]);
     login(match[3]);
     if (userRef.current) userRef.current.value = "";
     if (passRef.current) passRef.current.value = "";

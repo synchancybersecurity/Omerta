@@ -1,3 +1,5 @@
+import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
+
 const KEY = "omerta_db_v1";
 
 type User = { id: number; handle: string; passphrase: string; role: string; created_at: number };
@@ -154,16 +156,35 @@ function nid() {
 
 let db: Db = emptyDb();
 let loaded = false;
+let loading: Promise<void> | null = null;
 
-function load() {
-  if (loaded || typeof localStorage === "undefined") return;
-  loaded = true;
+function ensureLoaded() {
+  if (loaded) return Promise.resolve();
+  if (!loading) loading = loadAsync();
+  return loading;
+}
+
+async function loadAsync() {
+  if (typeof localStorage === "undefined") {
+    loaded = true;
+    return;
+  }
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) db = { ...emptyDb(), ...JSON.parse(raw) };
+    if (raw) {
+      const json = isSealed(raw) ? await openVault(raw) : raw;
+      db = { ...emptyDb(), ...JSON.parse(json) };
+      if (!isSealed(raw)) {
+        lastSaved = "";
+        save();
+      } else {
+        lastSaved = JSON.stringify(db);
+      }
+    }
   } catch {
     db = emptyDb();
   }
+  loaded = true;
 }
 
 let lastSaved = "";
@@ -173,15 +194,17 @@ function save() {
     const next = JSON.stringify(db);
     if (next === lastSaved) return;
     lastSaved = next;
-    localStorage.setItem(KEY, next);
-    if (typeof window !== "undefined") window.dispatchEvent(new Event("omerta-live"));
+    void sealVault(next).then((sealed) => {
+      localStorage.setItem(KEY, sealed);
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("omerta-live"));
+    });
   } catch {
     /* memory copy still stands */
   }
 }
 
-export function grantLocalRole(handle: string, role: "admin" | "moderator" | "basic") {
-  load();
+export async function grantLocalRole(handle: string, role: "admin" | "moderator" | "basic") {
+  await ensureLoaded();
   const name = handle.trim();
   if (!name) return;
   const existing = db.users.find((u) => u.handle.toLowerCase() === name.toLowerCase());
@@ -245,7 +268,7 @@ function viewPost(p: Post) {
 }
 
 async function route(path: string, method: string, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  load();
+  await ensureLoaded();
   clearRoomsIfDue();
   const url = new URL(path, "http://local");
   const q = url.searchParams;

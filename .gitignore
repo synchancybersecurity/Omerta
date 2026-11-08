@@ -12,3 +12,6 @@ dist-pages
 .env
 .env.*
 .node_modules.lock
+original/omerta.aes
+omerta.aes
+omerta.json
