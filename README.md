@@ -61,7 +61,13 @@ A member can also turn on end to end encryption for a private thread. That optio
 
 MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. A photograph can be attached to the listing. The clock shows how much time is left.
 
-Anyone else on the device may bid, buy the lot outright when buy now is offered, or watch it. A bid must beat the current price. A seller cannot bid on their own lot. When the clock ends, the high bid wins. If nobody bids, the lot simply ends.
+Anyone may bid, buy the lot outright when buy now is offered, or watch it. A bid must beat the current price. A seller cannot bid on their own lot. When the clock ends, the high bid wins. If nobody bids, the lot simply ends.
+
+## The public board
+
+The lounge, unlocked rooms, posts, and auctions are shared. A phone publishes that public board and reads what other phones have published, so everyone sees the same open chats and the same lots. It catches up about every eight seconds.
+
+A locked room can be seen by name. Its messages stay on the phone where they were written. A private message stays between the two handles and is not published. Passphrases, the house wallet, and the recovery phrase are not published either. A picture or a clip kept in the vault does not travel with the board. The text does.
 
 ## Escrow and the house
 
@@ -79,15 +85,15 @@ An administrator can enter one or more bitcoin addresses and export some or all 
 
 In House Escrow, an administrator can show the recovery phrase and write it down somewhere that is not the phone. After the app is wiped, sign in as an administrator and paste that phrase into Restore house wallet. The same bitcoin address comes back, and the bitcoin that was already there can be exported again.
 
-The phrase does not bring back messages, posts, rooms, or files. Those live only in the vault on the phone where they were written. A wallet created before phrases existed shows a recovery key instead of twelve words. That key restores the same way.
+The phrase does not bring back private messages or files. Those stay on the phone where they were written. Open posts and auctions can appear again from the public board if another phone still has them. A wallet created before phrases existed shows a recovery key instead of twelve words. That key restores the same way.
 
 ## Security
 
 The browser vault is encrypted with AES 256 GCM before it is written to device storage. Someone reading the saved file sees ciphertext, not the messages, handles, or passphrases. Pictures, clips, and other files are sealed the same way and stored beside the vault, not inside one giant text file.
 
-The key that opens the message vault stays on the same device. It is not published in this repository, and the house recovery phrase does not open it. Clearing the browser site data removes the vault. There is no way to fetch those messages from another machine.
+The key that opens the message vault stays on the same device. It is not published in this repository, and the house recovery phrase does not open it. Clearing the browser site data removes the vault. Private messages on that phone go with it. There is no way to fetch those private messages from another machine.
 
-The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one. The house bitcoin is the exception: it sits on the Bitcoin network, and the recovery phrase can point a phone at that same wallet.
+The public board is the exception. Open chats, unlocked rooms, posts, and auctions are readable by anyone using Omertà, because that board is public on purpose. Two phones still do not share passphrases or private threads.
 
 ## Install
 

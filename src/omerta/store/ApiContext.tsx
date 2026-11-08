@@ -223,11 +223,11 @@ export function ApiProvider({ children }: { children: ReactNode }) {
 
   const fetchMessages = useCallback(async (conversationId: number) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}/messages`);
+      const res = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}/messages?handle=${encodeURIComponent(userHandle)}`);
       const data = await res.json();
       setMessages(prev => ({ ...prev, [conversationId]: Array.isArray(data) ? data : [] }));
     } catch { /* silently fail */ }
-  }, []);
+  }, [userHandle]);
 
   const sendPrivateMessage = useCallback(async (conversationId: number, sender: string, content: string, burnAfterRead = false, emojiEncrypted = false, e2eEncrypted = false, replyTo?: string | null, replyContent?: string | null, replySender?: string | null) => {
     try {

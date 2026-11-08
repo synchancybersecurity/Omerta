@@ -1,5 +1,6 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
+import { exchangeBoard, type PublicBoard } from "@omerta/board";
 import { asBitcoinWallet, createHouseWallet, exportHouseBtc, isBtcAddress, restoreHouseWallet, spotUsd } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
@@ -391,6 +392,86 @@ async function loadAsync() {
     db.moneyUnit = "btc";
   }
   loaded = true;
+  startBoard();
+}
+
+function publicSnapshot(): PublicBoard {
+  const unlocked = new Set(db.chatRooms.filter((room) => !room.is_locked).map((room) => room.id));
+  const light = (value: unknown) => (typeof value === "string" && (value.startsWith("data:") || value.length > 400) ? null : value);
+  return {
+    posts: db.posts.filter((post) => !post.is_burned).slice(0, 40).map((post) => ({ ...post, author_avatar: light(post.author_avatar) as string | null })),
+    chat: db.openChatMessages.filter((msg) => Number(msg.timestamp) >= (db.roomClearedAt || 0)).slice(-80),
+    rooms: db.chatRooms.map(({ password: _password, ...room }) => room),
+    roomMessages: db.roomMessages.filter((msg) => unlocked.has(String(msg.room_id)) && Number(msg.timestamp) >= (db.roomClearedAt || 0)).slice(-80),
+    lots: db.listings.slice(0, 40).map((lot) => ({ ...lot, image: light(lot.image) as string | null })),
+  };
+}
+
+function mergeBoard(remote: PublicBoard) {
+  let changed = false;
+  const add = (list: Array<{ id?: unknown }>, row: { id?: unknown }) => {
+    if (!row || row.id === undefined || list.some((item) => String(item.id) === String(row.id))) return;
+    list.push(row);
+    changed = true;
+  };
+  for (const post of remote.posts || []) {
+    if (!post.id || !post.author_handle || typeof post.content !== "string") continue;
+    add(db.posts, post as Post);
+  }
+  for (const msg of remote.chat || []) {
+    if (Number(msg.timestamp) < (db.roomClearedAt || 0)) continue;
+    add(db.openChatMessages, msg);
+  }
+  for (const room of remote.rooms || []) {
+    if (!room.id || db.chatRooms.some((item) => item.id === String(room.id))) continue;
+    const { password: _password, ...rest } = room as Room;
+    db.chatRooms.push({ ...rest, password: null });
+    changed = true;
+  }
+  const unlocked = new Set(db.chatRooms.filter((room) => !room.is_locked).map((room) => room.id));
+  for (const msg of remote.roomMessages || []) {
+    if (!unlocked.has(String(msg.room_id)) || Number(msg.timestamp) < (db.roomClearedAt || 0)) continue;
+    add(db.roomMessages, msg);
+  }
+  for (const lot of remote.lots || []) {
+    const incoming = lot as Listing;
+    const local = db.listings.find((item) => item.id === incoming.id);
+    if (!local) {
+      db.listings.push({ ...incoming, bids: incoming.bids || [], watchers: incoming.watchers || [] });
+      changed = true;
+      continue;
+    }
+    for (const bid of incoming.bids || []) {
+      if (!local.bids.some((item) => item.id === bid.id)) {
+        local.bids.push(bid);
+        changed = true;
+      }
+    }
+    if (local.status === "live" && incoming.status && incoming.status !== "live") {
+      local.status = incoming.status;
+      local.winner = incoming.winner;
+      local.sold_price = incoming.sold_price;
+      local.house_fee = incoming.house_fee;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+let boardStarted = false;
+function startBoard() {
+  if (boardStarted || typeof WebSocket === "undefined") return;
+  boardStarted = true;
+  const tick = async () => {
+    try {
+      const remote = await exchangeBoard(publicSnapshot());
+      let changed = false;
+      for (const board of remote) if (mergeBoard(board)) changed = true;
+      if (changed) save();
+    } catch { /* a relay can be down */ }
+  };
+  void tick();
+  window.setInterval(() => { void tick(); }, 8000);
 }
 
 async function readBlob() {
@@ -616,6 +697,11 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "conversations" && seg[2] === "messages" && method === "GET") {
     const id = Number(seg[1]);
+    const handle = q.get("handle") || "";
+    const conv = db.conversations.find((item) => item.id === id);
+    if (!conv || (!sameHandle(conv.user1_handle, handle) && !sameHandle(conv.user2_handle, handle))) {
+      return json({ error: "Private" }, 403);
+    }
     return json(db.messages.filter((m) => m.conversation_id === id).sort((a, b) => a.timestamp - b.timestamp));
   }
 
