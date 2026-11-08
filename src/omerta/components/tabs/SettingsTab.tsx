@@ -3,7 +3,7 @@ import {
   Bell, Eye, Shield, Globe, Moon, Volume2, AlertTriangle, CheckCircle,
   Zap, Lock, Unlock, Radio, UserX, KeyRound, Palette, RotateCcw, Droplets, Sun, Type,
   MessageSquare, MessageCircle, Square, Minus, AlignLeft, Sparkles, Trash2,
-  ShieldCheck, UserPlus, UserCog, Wallet, Percent, Landmark, Receipt, Gavel,
+  ShieldCheck, UserPlus, UserCog, Wallet, Landmark, Gavel,
   ChevronDown, User, Crown, Search, X
 } from 'lucide-react';
 import { useApp } from '@omerta/store/AppContext';
@@ -62,83 +62,68 @@ function DropdownSection({ title, subtitle, icon: Icon, children, defaultOpen = 
 }
 
 function HouseEscrowSettings() {
+  const { userHandle } = useApp();
   const { houseSettings, fetchHouseSettings, saveHouseSettings } = useApi();
-  const [holdingWallet, setHoldingWallet] = useState(houseSettings.holdingWallet);
   const [feeWallet, setFeeWallet] = useState(houseSettings.feeWallet);
-  const [feePercent, setFeePercent] = useState(houseSettings.houseFeePercent);
   const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState("");
+  const isFlint = userHandle.trim().toLowerCase() === "flint";
 
   useEffect(() => { fetchHouseSettings(); }, [fetchHouseSettings]);
-  useEffect(() => {
-    setHoldingWallet(houseSettings.holdingWallet);
-    setFeeWallet(houseSettings.feeWallet);
-    setFeePercent(houseSettings.houseFeePercent);
-  }, [houseSettings]);
+  useEffect(() => { setFeeWallet(houseSettings.feeWallet); }, [houseSettings.feeWallet]);
+
+  const collected = (houseSettings.deposits || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
   const handleSave = async () => {
-    await saveHouseSettings({ holdingWallet, feeWallet, houseFeePercent: feePercent });
+    const result = await saveHouseSettings({ feeWallet, actor: userHandle });
+    if (result && result.error) {
+      setNotice(result.error);
+      return;
+    }
+    setNotice("");
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   return (
     <div className="space-y-4 pt-2">
-      <div>
-        <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          <Wallet size={10} /> Holding Wallet
-        </label>
-        <input
-          type="text"
-          value={holdingWallet}
-          onChange={e => setHoldingWallet(e.target.value)}
-          placeholder="Address where user funds are held"
-          className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none"
-          style={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }}
-        />
-        <p className="font-mono text-[9px] mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>User escrow funds are deposited here until released</p>
+      <p className="font-mono text-[10px] leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>
+        The house keeps 3 percent of every auction sale and every escrow payment. That cut is credited to the wallet below when the sale or payment clears.
+      </p>
+      <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
+        <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>Credited to the house</span>
+        <p className="font-mono text-lg" style={{ color: "hsl(var(--primary))" }}>${collected.toFixed(2)}</p>
       </div>
-
       <div>
-        <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          <Receipt size={10} /> Fee Wallet
+        <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "hsl(var(--muted-foreground))" }}>
+          <Wallet size={10} /> House wallet
         </label>
         <input
           type="text"
           value={feeWallet}
           onChange={e => setFeeWallet(e.target.value)}
-          placeholder="Address for house fee collection"
-          className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none"
-          style={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }}
+          disabled={!isFlint}
+          placeholder="Crypto address for the house cut"
+          className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none disabled:opacity-60"
+          style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}
         />
-        <p className="font-mono text-[9px] mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>House commission is sent here on every release</p>
       </div>
-
-      <div>
-        <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          <Percent size={10} /> House Fee
-        </label>
-        <div className="flex items-center gap-3">
-          <input
-            type="range"
-            min={0.5}
-            max={10}
-            step={0.25}
-            value={feePercent}
-            onChange={e => setFeePercent(Number(e.target.value))}
-            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
-            style={{ background: 'linear-gradient(to right, hsl(var(--muted)), hsl(var(--primary)))' }}
-          />
-          <span className="font-mono text-sm w-16 text-right" style={{ color: 'hsl(var(--primary))' }}>{feePercent.toFixed(2)}%</span>
+      {notice && <p className="font-mono text-[10px]" style={{ color: "hsl(var(--destructive))" }}>{notice}</p>}
+      {isFlint && (
+        <button
+          onClick={handleSave}
+          className="w-full py-2 font-mono text-xs uppercase tracking-wider rounded-sm transition-all hover:brightness-110"
+          style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}
+        >
+          {saved ? "// SAVED //" : "Save house wallet"}
+        </button>
+      )}
+      {(houseSettings.deposits || []).slice(0, 8).map((row) => (
+        <div key={row.id} className="flex items-center justify-between font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · ${Number(row.gross).toFixed(2)}</span>
+          <span style={{ color: "hsl(var(--primary))" }}>${Number(row.amount).toFixed(2)}</span>
         </div>
-      </div>
-
-      <button
-        onClick={handleSave}
-        className="w-full py-2 font-mono text-xs uppercase tracking-wider rounded-sm transition-all hover:brightness-110"
-        style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
-      >
-        {saved ? '// SAVED //' : 'Save House Settings'}
-      </button>
+      ))}
     </div>
   );
 }

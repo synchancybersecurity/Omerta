@@ -1,4 +1,4 @@
-const CACHE = "omerta-shell-v18";
+const CACHE = "omerta-shell-v19";
 const SHELL = ["./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./logo.jpg"];
 
 self.addEventListener("install", (event) => {

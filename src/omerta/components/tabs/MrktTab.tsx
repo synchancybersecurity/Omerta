@@ -311,6 +311,7 @@ export default function MrktTab() {
             <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>{open.status === "sold" ? "Sold for" : open.bids.length ? "Current bid" : "Opening price"}</p>
             <p className="font-serif text-4xl mt-1" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(open))}</p>
             <p className="font-mono text-xs mt-2" style={{ color: "hsl(var(--foreground))" }}>{statusLine(open)} · {open.bids.length} bids{open.winner ? " · " + open.winner : ""}</p>
+            <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>The house keeps 3 percent of the sale.</p>
           </div>
           {open.description && <p className="font-mono text-xs leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>{open.description}</p>}
           {open.status === "live" && open.seller.toLowerCase() !== me && (

@@ -98,9 +98,9 @@ interface ApiContextValue {
   resolveEscrow: (id: string, resolution: 'released' | 'refunded' | 'disputed', adminHandle: string, note?: string) => Promise<void>;
   fetchAllEscrows: () => Promise<void>;
   escrows: Array<{ id: string; sender: string; recipient: string; amount: number; house_fee?: number; net_amount?: number; house_fee_percent?: number; description: string; status: string; created_at: number; resolved_at?: number | null; resolved_by?: string | null; resolution_note?: string | null }>;
-  houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number };
+  houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number; deposits?: Array<{ id: string; source: string; source_id: string; gross: number; amount: number; wallet: string; timestamp: number }> };
   fetchHouseSettings: () => Promise<void>;
-  saveHouseSettings: (settings: { holdingWallet?: string; feeWallet?: string; houseFeePercent?: number }) => Promise<void>;
+  saveHouseSettings: (settings: { feeWallet?: string; actor?: string }) => Promise<{ error?: string } | null | void>;
   searchMessages: (handle: string, query: string) => Promise<Array<Record<string, unknown>>>;
   chatRooms: Array<{ id: string; name: string; creator_handle: string; creator_role?: string; is_locked: number; password?: string | null; locked_by?: string | null; lock_reason?: string | null; created_at: number }>;
   roomMessages: Array<{ id: number; room_id: string; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; e2e_encrypted: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null }>;
@@ -146,7 +146,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   const [smsMessages, setSmsMessages] = useState<ApiContextValue['smsMessages']>([]);
   const [searchResults, setSearchResults] = useState<ApiContextValue['searchResults']>([]);
   const [escrows, setEscrows] = useState<ApiContextValue['escrows']>([]);
-  const [houseSettings, setHouseSettings] = useState<ApiContextValue['houseSettings']>({ holdingWallet: '', feeWallet: '', houseFeePercent: 2.25 });
+  const [houseSettings, setHouseSettings] = useState<ApiContextValue['houseSettings']>({ holdingWallet: '', feeWallet: '', houseFeePercent: 3, deposits: [] });
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [chatRooms, setChatRooms] = useState<ApiContextValue['chatRooms']>([]);
   const [roomMessages, setRoomMessages] = useState<ApiContextValue['roomMessages']>([]);
@@ -369,20 +369,29 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       setHouseSettings({
         holdingWallet: data.holdingWallet || '',
         feeWallet: data.feeWallet || '',
-        houseFeePercent: data.houseFeePercent ?? 2.25,
+        houseFeePercent: 3,
+        deposits: Array.isArray(data.deposits) ? data.deposits : [],
       });
     } catch { /* silently fail */ }
   }, []);
 
-  const saveHouseSettings = useCallback(async (settings: { holdingWallet?: string; feeWallet?: string; houseFeePercent?: number }) => {
+  const saveHouseSettings = useCallback(async (settings: { feeWallet?: string; actor?: string }) => {
     try {
-      await fetch(`${API_BASE_URL}/api/house/settings`, {
+      const res = await fetch(`${API_BASE_URL}/api/house/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
-      setHouseSettings(prev => ({ ...prev, ...settings }));
-    } catch { /* silently fail */ }
+      const data = await res.json();
+      if (!res.ok) return data;
+      setHouseSettings({
+        holdingWallet: data.holdingWallet || settings.feeWallet || '',
+        feeWallet: data.feeWallet || settings.feeWallet || '',
+        houseFeePercent: 3,
+        deposits: Array.isArray(data.deposits) ? data.deposits : [],
+      });
+      return data;
+    } catch { return null; }
   }, []);
 
   const searchMessages = useCallback(async (handle: string, query: string) => {

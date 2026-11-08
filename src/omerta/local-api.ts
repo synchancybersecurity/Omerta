@@ -63,11 +63,20 @@ type Db = {
   roomMessages: Array<Record<string, unknown>>;
   roomClearedAt: number;
   houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number };
+  houseDeposits: HouseDeposit[];
   publicKeys: Record<string, string>;
   listings: Listing[];
 };
 
-type Bid = { id: string; bidder: string; amount: number; timestamp: number };
+type HouseDeposit = {
+  id: string;
+  source: "auction" | "escrow";
+  source_id: string;
+  gross: number;
+  amount: number;
+  wallet: string;
+  timestamp: number;
+};
 type Listing = {
   id: string;
   seller: string;
@@ -82,11 +91,39 @@ type Listing = {
   status: "live" | "sold" | "ended" | "cancelled";
   winner: string | null;
   sold_price: number | null;
+  house_fee?: number;
   bids: Bid[];
   watchers: string[];
 };
 
 const ROOM_CLEAR_MS = 48 * 60 * 60 * 1000;
+
+const HOUSE_CUT = 0.03;
+
+function creditHouse(source: "auction" | "escrow", sourceId: string, gross: number) {
+  if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
+  if (db.houseDeposits.some((row) => row.source === source && row.source_id === sourceId)) {
+    return db.houseDeposits.find((row) => row.source === source && row.source_id === sourceId)?.amount || 0;
+  }
+  const amount = Number((Number(gross) * HOUSE_CUT).toFixed(2));
+  if (!(amount > 0)) return 0;
+  db.houseDeposits.unshift({
+    id: "fee" + nid(),
+    source,
+    source_id: sourceId,
+    gross: Number(gross),
+    amount,
+    wallet: (db.houseSettings?.feeWallet || "").trim(),
+    timestamp: Date.now(),
+  });
+  return amount;
+}
+
+function sweepHouseWallet(wallet: string) {
+  for (const row of db.houseDeposits || []) {
+    if (!row.wallet) row.wallet = wallet;
+  }
+}
 
 function highBid(lot: Listing) {
   return lot.bids.reduce((top, bid) => (bid.amount > top ? bid.amount : top), 0);
@@ -105,6 +142,7 @@ function settleLot(lot: Listing) {
     lot.status = "sold";
     lot.winner = top.bidder;
     lot.sold_price = top.amount;
+    lot.house_fee = creditHouse("auction", lot.id, top.amount);
   } else {
     lot.status = "ended";
     lot.winner = null;
@@ -195,7 +233,8 @@ function emptyDb(): Db {
       },
     ],
     roomClearedAt: now,
-    houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 2.25 },
+    houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3 },
+    houseDeposits: [],
     publicKeys: {},
     listings: [
       {
@@ -283,6 +322,8 @@ async function loadAsync() {
     if (raw) {
       const json = isSealed(raw) ? await openVault(raw) : raw;
       db = { ...emptyDb(), ...JSON.parse(json) };
+      db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3 };
+      if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!isSealed(raw)) {
         lastSaved = "";
         save();
@@ -622,13 +663,20 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   }
 
   if (seg[0] === "house" && seg[1] === "settings" && method === "GET") {
-    return json(db.houseSettings);
+    db.houseSettings.houseFeePercent = 3;
+    return json({ ...db.houseSettings, deposits: db.houseDeposits || [] });
   }
   if (seg[0] === "house" && seg[1] === "settings" && method === "POST") {
     const body = await readJson(input, init);
-    db.houseSettings = { ...db.houseSettings, ...body };
+    const actor = String(body.actor || "").trim().toLowerCase();
+    if (actor !== "flint") return json({ error: "Only the house can set this wallet" }, 403);
+    const wallet = String(body.feeWallet ?? "").trim();
+    db.houseSettings.feeWallet = wallet;
+    db.houseSettings.holdingWallet = wallet;
+    db.houseSettings.houseFeePercent = 3;
+    sweepHouseWallet(wallet);
     save();
-    return json({ success: true });
+    return json({ success: true, ...db.houseSettings, deposits: db.houseDeposits || [] });
   }
 
   if (seg[0] === "escrow" && seg[1] === "all" && method === "GET") {
@@ -647,7 +695,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   if (seg[0] === "escrow" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
     const amount = Number(body.amount);
-    const pct = db.houseSettings.houseFeePercent || 2.25;
+    const pct = 3;
     const houseFee = Number((amount * (pct / 100)).toFixed(2));
     const escrow = {
       id: "e" + nid(),
@@ -677,6 +725,11 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     escrow.resolved_at = Date.now();
     escrow.resolved_by = body.adminHandle;
     escrow.resolution_note = body.note || "";
+    if (escrow.status === "released") {
+      escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount));
+      escrow.house_fee_percent = 3;
+      escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
+    }
     save();
     return json(escrow);
   }
@@ -686,6 +739,11 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const escrow = db.escrows.find((e) => e.id === seg[1]);
     if (!escrow || !map[seg[2]]) return json({ error: "Not found" }, 404);
     escrow.status = map[seg[2]];
+    if (escrow.status === "released") {
+      escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount));
+      escrow.house_fee_percent = 3;
+      escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
+    }
     save();
     return json(escrow);
   }
@@ -996,6 +1054,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     lot.status = "sold";
     lot.winner = bidder;
     lot.sold_price = lot.buy_now;
+    lot.house_fee = creditHouse("auction", lot.id, lot.buy_now);
     lot.ends_at = Date.now();
     save();
     return json(lot);
