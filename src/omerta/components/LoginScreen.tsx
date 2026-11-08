@@ -14,8 +14,15 @@ export default function LoginScreen() {
 
   const [loginError, setLoginError] = useState('');
   const [showSecretLogin, setShowSecretLogin] = useState(false);
+  const [showInstallHint, setShowInstallHint] = useState(false);
   const { login, userRole, setUserRole } = useApp();
   const { auth, register } = useApi();
+
+  useEffect(() => {
+    const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const standalone = iosStandalone || window.matchMedia("(display-mode: standalone)").matches;
+    setShowInstallHint(!standalone);
+  }, []);
 
   const { rotation, wasActivated, handlers } = useCoinDrag({
     holdMs: 5000,
@@ -100,6 +107,11 @@ export default function LoginScreen() {
             <p className="font-mono text-sm tracking-[0.3em] uppercase mt-4" style={{ color: 'hsl(var(--muted-foreground))' }}>
               <ScrambleText text="// CODE OF SILENCE //" trigger={showLogin} speed={25} />
             </p>
+            {showInstallHint && (
+              <p className="font-mono text-[10px] leading-relaxed tracking-wide mt-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                Safari: Share, then Add to Home Screen. Android: menu, then Add to Home screen.
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className={`space-y-5 transition-all duration-700 ${showLogin ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>

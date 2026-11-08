@@ -6,6 +6,7 @@ screenshots
 attachments
 artifacts
 dist
+dist-pages
 .nitro
 *.log
 .env
