@@ -1,6 +1,6 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
-import { createHouseWallet, exportHouseUsdc, isEvmAddress } from "@omerta/chain";
+import { createHouseWallet, exportHouseUsdc, isEvmAddress, restoreHouseWallet } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
 
@@ -66,7 +66,7 @@ type Db = {
   houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number; chain: string };
   houseDeposits: HouseDeposit[];
   chainPayments: ChainPayment[];
-  houseWallet: { address: string; key: string } | null;
+  houseWallet: { address: string; key: string; phrase?: string } | null;
   payoutWallets: string[];
   publicKeys: Record<string, string>;
   listings: Listing[];
@@ -710,6 +710,27 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       return json({ success: true, tx });
     } catch (err) {
       return json({ error: err instanceof Error ? err.message : "The export was refused" }, 400);
+    }
+  }
+  if (seg[0] === "house" && seg[1] === "recovery" && method === "POST") {
+    const body = await readJson(input, init);
+    if (!isHouseAdmin(String(body.actor || ""))) return json({ error: "Only an admin can see the recovery phrase" }, 403);
+    const wallet = ensureHouseWallet();
+    save();
+    return json({ phrase: wallet.phrase || "", key: wallet.phrase ? "" : wallet.key });
+  }
+  if (seg[0] === "house" && seg[1] === "restore" && method === "POST") {
+    const body = await readJson(input, init);
+    if (!isHouseAdmin(String(body.actor || ""))) return json({ error: "Only an admin can restore the house wallet" }, 403);
+    try {
+      const restored = restoreHouseWallet(String(body.secret || ""));
+      db.houseWallet = restored;
+      db.houseSettings.feeWallet = restored.address;
+      db.houseSettings.holdingWallet = restored.address;
+      save();
+      return json({ success: true, address: restored.address });
+    } catch {
+      return json({ error: "That recovery phrase is not valid" }, 400);
     }
   }
   if (seg[0] === "house" && seg[1] === "payments" && seg[3] === "sent" && method === "POST") {

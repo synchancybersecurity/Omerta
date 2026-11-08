@@ -71,7 +71,7 @@ The house keeps 3 percent of every escrow, every bid, and every auction sale. A 
 
 Those fees are booked to a house wallet that the app creates on the phone. When a payer approves the transfer, the 3 percent is sent as USDC on Base or on Ethereum, whichever chain the house is using. The payer still has to approve it in their own wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed.
 
-An administrator can enter one or more payout addresses and export some or all of the USDC from the house wallet to an address they choose. The house wallet needs a little ETH on that chain to pay the network fee for the export. The house key stays on this phone. If the app is deleted, coins can remain on the chain while this phone loses the ability to send them. Export before wiping the app.
+An administrator can enter one or more payout addresses and export some or all of the USDC from the house wallet to an address they choose. The house wallet needs a little ETH on that chain to pay the network fee for the export. The recovery phrase for that wallet can be written down. After the app is wiped, an administrator enters the same phrase and the coins are reachable again, because the address is the same one.
 
 ## Security
 

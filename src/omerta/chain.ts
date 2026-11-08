@@ -63,7 +63,17 @@ function transferData(wallet: string, amount: number) {
 
 export function createHouseWallet() {
   const wallet = Wallet.createRandom();
-  return { address: wallet.address, key: wallet.privateKey };
+  return { address: wallet.address, key: wallet.privateKey, phrase: wallet.mnemonic?.phrase || "" };
+}
+
+export function restoreHouseWallet(secret: string) {
+  const text = secret.trim().toLowerCase().replace(/\s+/g, " ");
+  if (/^0x[a-f0-9]{64}$/.test(text)) {
+    const wallet = new Wallet(text);
+    return { address: wallet.address, key: wallet.privateKey, phrase: "" };
+  }
+  const wallet = Wallet.fromPhrase(text);
+  return { address: wallet.address, key: wallet.privateKey, phrase: wallet.mnemonic?.phrase || text };
 }
 
 export async function exportHouseUsdc(key: string, chainName: string, to: string, amount?: number) {

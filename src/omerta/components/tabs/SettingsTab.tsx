@@ -71,6 +71,8 @@ function HouseEscrowSettings() {
   const [saved, setSaved] = useState(false);
   const [notice, setNotice] = useState("");
   const [balance, setBalance] = useState("");
+  const [phrase, setPhrase] = useState("");
+  const [restore, setRestore] = useState("");
   const isAdmin = userRole === "admin" || userHandle.trim().toLowerCase() === "flint";
   const houseAddress = houseSettings.houseAddress || houseSettings.feeWallet;
 
@@ -140,10 +142,44 @@ function HouseEscrowSettings() {
     fetchHouseSettings();
   };
 
+  const showPhrase = async () => {
+    setNotice("");
+    const res = await fetch("/api/house/recovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actor: userHandle }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setNotice(data.error || "The phrase could not be shown");
+      return;
+    }
+    setPhrase(data.phrase || data.key || "");
+    if (!data.phrase && data.key) setBalance("Write this recovery key down. After a wipe, paste it here to bring the same coins back.");
+  };
+
+  const restoreWallet = async () => {
+    setNotice("");
+    const res = await fetch("/api/house/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actor: userHandle, secret: restore }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setNotice(data.error || "That recovery phrase is not valid");
+      return;
+    }
+    setRestore("");
+    setPhrase("");
+    setBalance("Wallet restored. " + (data.address || ""));
+    fetchHouseSettings();
+  };
+
   return (
     <div className="space-y-4 pt-2">
       <p className="font-mono text-[10px] leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>
-        Fees gather in the house wallet on this phone. An admin can export them to any address entered below. The house wallet needs a little ETH on the chosen chain to pay the network fee. Payers still approve the 3 percent into this wallet.
+        Fees gather in the house wallet on this phone. Write down the recovery phrase. After a wipe, an admin can enter the same phrase and the coins come back. An admin can also export them to any address entered below. The house wallet needs a little ETH on the chosen chain to pay the network fee.
       </p>
       <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
         <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>House wallet</span>
@@ -188,6 +224,25 @@ function HouseEscrowSettings() {
             style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}
           >
             {saved ? "// SAVED //" : "Save payout address"}
+          </button>
+          <button type="button" onClick={() => void showPhrase()} className="w-full py-2 font-mono text-xs uppercase tracking-wider rounded-sm border" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }}>
+            Show recovery phrase
+          </button>
+          {phrase && (
+            <p className="font-mono text-[11px] leading-relaxed break-words p-3 border rounded-md" style={{ borderColor: "hsl(var(--primary))", color: "hsl(var(--foreground))" }}>
+              {phrase}
+            </p>
+          )}
+          <textarea
+            value={restore}
+            onChange={(e) => setRestore(e.target.value)}
+            placeholder="Paste the recovery phrase to bring the coins back"
+            rows={3}
+            className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none"
+            style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}
+          />
+          <button type="button" onClick={() => void restoreWallet()} className="w-full py-2 font-mono text-xs uppercase tracking-wider rounded-sm border" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }}>
+            Restore house wallet
           </button>
         </>
       )}
