@@ -138,7 +138,12 @@ function MessageBubble({
       .then(async (mine) => {
         if (!mine?.privateKey || !mine?.publicKey) return null;
         const payload = JSON.parse(message.content);
-        return openPrivate(payload, await importPrivateKey(mine.privateKey), mine.publicKey);
+        const pairs = [{ publicKey: mine.publicKey, privateKey: mine.privateKey }, ...(Array.isArray(mine.history) ? mine.history : [])];
+        for (const pair of pairs) {
+          if (!pair?.privateKey || !pair?.publicKey) continue;
+          try { return await openPrivate(payload, await importPrivateKey(pair.privateKey), pair.publicKey); } catch { /* this session key did not seal it */ }
+        }
+        return null;
       })
       .then((opened) => { if (!dead && opened) setE2ePlaintext(opened.body); })
       .catch(() => {})
@@ -418,10 +423,15 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (activeConversationId) {
-      fetchMessages(Number(activeConversationId));
-    }
+    if (activeConversationId) fetchMessages(Number(activeConversationId));
   }, [activeConversationId, fetchMessages]);
+
+  useEffect(() => {
+    if (!userHandle) return;
+    fetch("/api/policy").then((res) => res.json()).then((policy) => {
+      if (policy?.burnDefault) setBurnEnabled(true);
+    }).catch(() => {});
+  }, [userHandle, activeConversationId]);
 
   // Get conversation metadata from ApiContext
   const { conversations: apiConversations } = useApi();

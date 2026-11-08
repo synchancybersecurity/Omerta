@@ -57,7 +57,7 @@ Private messages and room messages appear as soon as they are sent. You do not h
 
 A post or a private message can carry a picture, a video, or another file. There is no size cap inside the app. The phone can still run out of space, and a very large clip can take a moment while it is sealed. Profile portraits are pictures you choose yourself. A picture or a clip in the vault does not travel to another phone. The writing does, when the message itself is public.
 
-A private message is sealed end to end between the two handles before it is stored. Each handle has its own key, kept on that phone. What is saved is ciphertext. The sender and the other handle can both read it. Nobody else is given the text. A private text message is sealed the same way. This is not a switch. It is on for every private thread. Older private messages already on the phone are sealed the next time the app opens.
+A private message is sealed end to end between the two handles before it is stored. Each handle has its own key, kept on that phone. What is saved is ciphertext. The sender and the other handle can both read it. Nobody else is given the text. A private text message is sealed the same way. This is not a switch. It is on for every private thread. Older private messages already on the phone are sealed the next time the app opens. If a new key is started later, the phone keeps the earlier keys and tries those too, so an older thread still opens.
 
 The lounge, unlocked rooms, and posts stay readable by everyone. That is the public board, and it is public on purpose.
 
