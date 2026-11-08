@@ -67,7 +67,7 @@ Anyone else on the device may bid, buy the lot outright when buy now is offered,
 
 Escrow holds a bitcoin amount between two handles. It can be released, disputed, refunded, or cancelled.
 
-The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not give that cut back. The rate is fixed. Prices, bids, escrow amounts, and the house books are all in bitcoin.
+The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not give that cut back. The rate is fixed. Prices, bids, escrow amounts, and the house books are stored in bitcoin. Every one of those figures is also shown in dollars, using the current bitcoin price. The dollar number is a quote. The coins that move are bitcoin.
 
 When a payer approves the transfer, that bitcoin is sent to the house wallet. The payer still has to approve it in their own bitcoin wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed. A cut smaller than the bitcoin dust limit stays on the books until it can be sent.
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi } from '@omerta/store/ApiContext';
-import { formatBtc, payHouseCut, recordHouseTx } from '@omerta/chain';
+import { payHouseCut, recordHouseTx } from '@omerta/chain';
+import { formatPair, useUsdPrice } from '@omerta/money';
 import {
   ShieldCheck, Lock, Unlock, AlertTriangle, X,
   Clock, ArrowRight,
@@ -18,6 +19,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; icon: typeof Loc
 
 export default function EscrowTab() {
   const { userHandle } = useApp();
+  const price = useUsdPrice();
+  const show = (value: number) => formatPair(value, price);
   const { escrows, fetchEscrows, createEscrow, updateEscrow, houseSettings, fetchHouseSettings } = useApi();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -116,14 +119,14 @@ export default function EscrowTab() {
             <Clock size={12} style={{ color: 'hsl(45, 90%, 40%)' }} />
             <span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>Pending</span>
           </div>
-          <span className="font-mono text-lg text-white">{formatBtc(totalPending)}</span>
+          <span className="font-mono text-lg text-white">{show(totalPending)}</span>
         </div>
         <div className="p-3 border rounded-lg" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--card))' }}>
           <div className="flex items-center gap-2 mb-1">
             <Unlock size={12} style={{ color: 'hsl(142, 76%, 36%)' }} />
             <span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>Released</span>
           </div>
-          <span className="font-mono text-lg text-white">{formatBtc(totalReleased)}</span>
+          <span className="font-mono text-lg text-white">{show(totalReleased)}</span>
         </div>
       </div>
 
@@ -143,11 +146,11 @@ export default function EscrowTab() {
                 <div className="mt-2 space-y-1 font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
                   <div className="flex justify-between">
                     <span>House Fee ({houseSettings.houseFeePercent}%)</span>
-                    <span style={{ color: 'hsl(var(--primary))' }}>{formatBtc(Number(amount) * (houseSettings.houseFeePercent / 100))}</span>
+                    <span style={{ color: 'hsl(var(--primary))' }}>{show(Number(amount) * (houseSettings.houseFeePercent / 100))}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Net to Recipient</span>
-                    <span style={{ color: 'hsl(142, 76%, 36%)' }}>{formatBtc(Number(amount) - (Number(amount) * (houseSettings.houseFeePercent / 100)))}</span>
+                    <span style={{ color: 'hsl(142, 76%, 36%)' }}>{show(Number(amount) - (Number(amount) * (houseSettings.houseFeePercent / 100)))}</span>
                   </div>
                   {houseSettings.holdingWallet && (
                     <div className="flex justify-between">
@@ -195,7 +198,7 @@ export default function EscrowTab() {
                   <StatusIcon size={14} style={{ color: status.text }} />
                   <span className="font-mono text-xs uppercase tracking-wider" style={{ color: status.text }}>{escrow.status}</span>
                 </div>
-                <span className="font-mono text-lg font-bold text-white">{formatBtc(escrow.amount)}</span>
+                <span className="font-mono text-lg font-bold text-white">{show(escrow.amount)}</span>
               </div>
 
               <div className="flex items-center gap-2 mb-2 font-mono text-xs">
@@ -213,15 +216,15 @@ export default function EscrowTab() {
                 <div className="mt-1 mb-2 p-2 rounded-md border" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
                   <div className="flex justify-between font-mono text-[10px] mb-1">
                     <span style={{ color: 'hsl(var(--muted-foreground))' }}>Total</span>
-                    <span style={{ color: 'hsl(var(--foreground))' }}>{formatBtc(escrow.amount)}</span>
+                    <span style={{ color: 'hsl(var(--foreground))' }}>{show(escrow.amount)}</span>
                   </div>
                   <div className="flex justify-between font-mono text-[10px] mb-1">
                     <span style={{ color: 'hsl(var(--muted-foreground))' }}>House Fee ({escrow.house_fee_percent}%)</span>
-                    <span style={{ color: 'hsl(var(--primary))' }}>-{formatBtc(escrow.house_fee || 0)}</span>
+                    <span style={{ color: 'hsl(var(--primary))' }}>-{show(escrow.house_fee || 0)}</span>
                   </div>
                   <div className="flex justify-between font-mono text-[10px]">
                     <span style={{ color: 'hsl(var(--muted-foreground))' }}>Net to Recipient</span>
-                    <span style={{ color: 'hsl(142, 76%, 36%)' }}>{formatBtc(escrow.net_amount || 0)}</span>
+                    <span style={{ color: 'hsl(142, 76%, 36%)' }}>{show(escrow.net_amount || 0)}</span>
                   </div>
                   {escrow.resolved_by && (
                     <div className="mt-1 pt-1 border-t" style={{ borderColor: 'hsl(var(--border))' }}>

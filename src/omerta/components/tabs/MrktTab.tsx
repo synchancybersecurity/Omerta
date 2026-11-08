@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatBtc, payHouseCut, recordHouseTx } from "@omerta/chain";
+import { payHouseCut, recordHouseTx } from "@omerta/chain";
+import { formatPair, useUsdPrice } from "@omerta/money";
 import { VaultImg } from "@omerta/components/Attachment";
 import { useApp } from "@omerta/store/AppContext";
 import { ArrowLeft, Clock, Gavel, Heart, Plus, Search, Store, Tag } from "lucide-react";
@@ -26,8 +27,8 @@ type Listing = {
 const CATEGORIES = ["All", "Relics", "Coin", "Documents", "Portraits", "Jewelry", "Oddities"];
 const DESKS = ["Live", "Ending", "Buy now", "Watching", "Bidding", "Selling"] as const;
 
-function money(value: number) {
-  return formatBtc(value);
+function money(value: number, price: number) {
+  return formatPair(value, price);
 }
 
 function highBid(lot: Listing) {
@@ -72,6 +73,7 @@ function statusLine(lot: Listing) {
 
 export default function MrktTab() {
   const { userHandle } = useApp();
+  const price = useUsdPrice();
   const [lots, setLots] = useState<Listing[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -320,8 +322,8 @@ export default function MrktTab() {
                       <Heart size={14} fill={watching ? "hsl(var(--primary))" : "none"} style={{ color: "hsl(var(--primary))", flexShrink: 0 }} />
                     </div>
                     <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>{lot.seller} · {lot.category}</p>
-                    <p className="font-mono text-sm mt-2" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(lot))} <span className="text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>{lot.bids.length ? lot.bids.length + " bids" : "opening"}</span></p>
-                    <p className="font-mono text-[10px] mt-1 flex items-center gap-1" style={{ color: lot.status === "live" ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))" }}><Clock size={10} /> {statusLine(lot)}{lot.buy_now !== null && lot.status === "live" ? " · Buy now " + money(lot.buy_now) : ""}</p>
+                    <p className="font-mono text-sm mt-2" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(lot), price)} <span className="text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>{lot.bids.length ? lot.bids.length + " bids" : "opening"}</span></p>
+                    <p className="font-mono text-[10px] mt-1 flex items-center gap-1" style={{ color: lot.status === "live" ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))" }}><Clock size={10} /> {statusLine(lot)}{lot.buy_now !== null && lot.status === "live" ? " · Buy now " + money(lot.buy_now, price) : ""}</p>
                   </div>
                 </button>
               );
@@ -341,18 +343,18 @@ export default function MrktTab() {
           </div>
           <div className="rounded-md border p-4" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--card))" }}>
             <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>{open.status === "sold" ? "Sold for" : open.bids.length ? "Current bid" : "Opening price"}</p>
-            <p className="font-serif text-4xl mt-1" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(open))}</p>
+            <p className="font-serif text-4xl mt-1" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(open), price)}</p>
             <p className="font-mono text-xs mt-2" style={{ color: "hsl(var(--foreground))" }}>{statusLine(open)} · {open.bids.length} bids{open.winner ? " · " + open.winner : ""}</p>
             <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>The house keeps 3 percent in bitcoin. A refund does not return it.</p>
           </div>
           {open.description && <p className="font-mono text-xs leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>{open.description}</p>}
           {open.status === "live" && open.seller.toLowerCase() !== me && (
             <div className="space-y-2">
-              <label className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Your bid · minimum {money(minimumBid(open))}</label>
-              <input value={bid} onChange={(e) => setBid(e.target.value)} inputMode="decimal" placeholder={formatBtc(minimumBid(open))} className="w-full rounded-sm px-3 py-3 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+              <label className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Your bid · minimum {money(minimumBid(open), price)}</label>
+              <input value={bid} onChange={(e) => setBid(e.target.value)} inputMode="decimal" placeholder={money(minimumBid(open), price)} className="w-full rounded-sm px-3 py-3 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }} />
               <button type="button" disabled={busy} onClick={() => placeBid(open)} className="w-full py-3 rounded-sm font-mono text-xs uppercase tracking-wider" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}><Gavel size={14} className="inline mr-2" />Place bid</button>
               {open.buy_now !== null && (
-                <button type="button" disabled={busy} onClick={() => buyNow(open)} className="w-full py-3 rounded-sm font-mono text-xs uppercase tracking-wider border" style={{ borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" }}>Buy now {money(open.buy_now)}</button>
+                <button type="button" disabled={busy} onClick={() => buyNow(open)} className="w-full py-3 rounded-sm font-mono text-xs uppercase tracking-wider border" style={{ borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" }}>Buy now {money(open.buy_now, price)}</button>
               )}
             </div>
           )}
@@ -368,7 +370,7 @@ export default function MrktTab() {
             {[...open.bids].reverse().map((item) => (
               <div key={item.id} className="flex items-center justify-between py-2 border-b" style={{ borderColor: "hsl(var(--border))" }}>
                 <span className="font-mono text-xs" style={{ color: "hsl(var(--foreground))" }}>{item.bidder}</span>
-                <span className="font-mono text-xs" style={{ color: "hsl(var(--primary))" }}>{money(item.amount)}</span>
+                <span className="font-mono text-xs" style={{ color: "hsl(var(--primary))" }}>{money(item.amount, price)}</span>
               </div>
             ))}
           </div>
@@ -385,7 +387,9 @@ export default function MrktTab() {
             {CATEGORIES.filter((item) => item !== "All").map((item) => <option key={item}>{item}</option>)}
           </select>
           <Field label="Opening price in BTC" value={form.start_price} onChange={(start_price) => setForm({ ...form, start_price })} numeric />
+          {Number(form.start_price) > 0 && <p className="font-mono text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>{money(Number(form.start_price), price)}</p>}
           <Field label="Buy now in BTC, optional" value={form.buy_now} onChange={(buy_now) => setForm({ ...form, buy_now })} numeric />
+          {Number(form.buy_now) > 0 && <p className="font-mono text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>{money(Number(form.buy_now), price)}</p>}
           <label className="block font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Duration</label>
           <div className="flex gap-2">
             {["1", "3", "5", "7"].map((days) => (

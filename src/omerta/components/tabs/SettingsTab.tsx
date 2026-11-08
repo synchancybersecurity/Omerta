@@ -6,7 +6,8 @@ import {
   ShieldCheck, UserPlus, UserCog, Wallet, Landmark, Gavel,
   ChevronDown, User, Crown, Search, X
 } from 'lucide-react';
-import { formatBtc, payHouseCut, readHouseBalance } from '@omerta/chain';
+import { payHouseCut, readHouseBalance } from '@omerta/chain';
+import { formatPair, useUsdPrice } from '@omerta/money';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi, API_BASE_URL } from '@omerta/store/ApiContext';
 
@@ -73,6 +74,8 @@ function HouseEscrowSettings() {
   const [phrase, setPhrase] = useState("");
   const [restore, setRestore] = useState("");
   const isAdmin = userRole === "admin" || userHandle.trim().toLowerCase() === "flint";
+  const price = useUsdPrice();
+  const show = (value: number) => formatPair(value, price);
   const houseAddress = houseSettings.houseAddress || houseSettings.feeWallet;
 
   useEffect(() => { fetchHouseSettings(); }, [fetchHouseSettings]);
@@ -97,7 +100,7 @@ function HouseEscrowSettings() {
     setBalance("");
     try {
       const result = await readHouseBalance(houseAddress);
-      setBalance("Bitcoin is connected. The house wallet holds " + result.btc.toFixed(8) + " BTC.");
+      setBalance("Bitcoin is connected. The house wallet holds " + show(result.btc) + ".");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "The chain did not answer");
     }
@@ -182,7 +185,7 @@ function HouseEscrowSettings() {
       <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
         <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>House wallet</span>
         <p className="font-mono text-[11px] break-all mt-1" style={{ color: "hsl(var(--foreground))" }}>{houseAddress || "Creating the wallet..."}</p>
-        <p className="font-mono text-lg mt-2" style={{ color: "hsl(var(--primary))" }}>{formatBtc(collected)} booked</p>
+        <p className="font-mono text-lg mt-2" style={{ color: "hsl(var(--primary))" }}>{show(collected)} booked</p>
         {balance && <p className="font-mono text-[10px] mt-2 break-all" style={{ color: "hsl(var(--foreground))" }}>{balance}</p>}
       </div>
       <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Bitcoin</p>
@@ -210,6 +213,7 @@ function HouseEscrowSettings() {
             className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none"
             style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}
           />
+          {Number(amount) > 0 && <p className="font-mono text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>{show(Number(amount))}</p>}
           <button
             onClick={handleSave}
             className="w-full py-2 font-mono text-xs uppercase tracking-wider rounded-sm transition-all hover:brightness-110"
@@ -250,14 +254,14 @@ function HouseEscrowSettings() {
       ))}
       {pending.map((row) => (
         <div key={row.id} className="flex items-center justify-between gap-2 font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
-          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {formatBtc(row.amount)}</span>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {show(row.amount)}</span>
           <button type="button" onClick={() => void sendCut(row)} className="px-2 py-1 uppercase" style={{ color: "hsl(var(--primary))" }}>Send</button>
         </div>
       ))}
       {(houseSettings.deposits || []).slice(0, 8).map((row) => (
         <div key={row.id} className="flex items-center justify-between font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
-          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {formatBtc(Number(row.gross))}</span>
-          <span style={{ color: "hsl(var(--primary))" }}>{formatBtc(Number(row.amount))}</span>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {show(Number(row.gross))}</span>
+          <span style={{ color: "hsl(var(--primary))" }}>{show(Number(row.amount))}</span>
         </div>
       ))}
     </div>
@@ -267,6 +271,8 @@ function HouseEscrowSettings() {
 function AdminEscrowOversight() {
   const { userHandle } = useApp();
   const { escrows, fetchAllEscrows, resolveEscrow, houseSettings } = useApi();
+  const price = useUsdPrice();
+  const show = (value: number) => formatPair(value, price);
   const [selectedEscrow, setSelectedEscrow] = useState<string | null>(null);
   const [resolutionNote, setResolutionNote] = useState('');
 
@@ -290,11 +296,11 @@ function AdminEscrowOversight() {
       <div className="grid grid-cols-4 gap-2">
         <div className="p-2 border rounded-lg text-center" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
           <span className="font-mono text-[9px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Volume</span>
-          <p className="font-mono text-sm" style={{ color: 'hsl(var(--foreground))' }}>{formatBtc(totalVolume)}</p>
+          <p className="font-mono text-sm" style={{ color: 'hsl(var(--foreground))' }}>{show(totalVolume)}</p>
         </div>
         <div className="p-2 border rounded-lg text-center" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
           <span className="font-mono text-[9px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Fees</span>
-          <p className="font-mono text-sm" style={{ color: 'hsl(var(--primary))' }}>{formatBtc(totalFees)}</p>
+          <p className="font-mono text-sm" style={{ color: 'hsl(var(--primary))' }}>{show(totalFees)}</p>
         </div>
         <div className="p-2 border rounded-lg text-center" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
           <span className="font-mono text-[9px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Pending</span>
@@ -352,7 +358,7 @@ function AdminEscrowOversight() {
                 <span className="font-mono text-xs uppercase tracking-wider" style={{ color: sc.text }}>{escrow.status}</span>
                 <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{escrow.id}</p>
               </div>
-              <span className="font-mono text-lg font-bold" style={{ color: 'hsl(var(--foreground))' }}>{formatBtc(escrow.amount)}</span>
+              <span className="font-mono text-lg font-bold" style={{ color: 'hsl(var(--foreground))' }}>{show(escrow.amount)}</span>
             </div>
             <div className="flex items-center gap-2 mb-1 font-mono text-[11px]">
               <span style={{ color: 'hsl(var(--foreground))' }}>{escrow.sender}</span>
@@ -363,8 +369,8 @@ function AdminEscrowOversight() {
               <p className="font-mono text-[10px] mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>{escrow.description}</p>
             )}
             <div className="flex justify-between font-mono text-[9px] mb-2">
-              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Fee ({escrow.house_fee_percent}%): <span style={{ color: 'hsl(var(--primary))' }}>{formatBtc(escrow.house_fee || 0)}</span></span>
-              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Net: <span style={{ color: 'hsl(142, 76%, 36%)' }}>{formatBtc(escrow.net_amount || escrow.amount)}</span></span>
+              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Fee ({escrow.house_fee_percent}%): <span style={{ color: 'hsl(var(--primary))' }}>{show(escrow.house_fee || 0)}</span></span>
+              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Net: <span style={{ color: 'hsl(142, 76%, 36%)' }}>{show(escrow.net_amount || escrow.amount)}</span></span>
             </div>
 
             {(escrow.status === 'pending' || escrow.status === 'disputed') && (
