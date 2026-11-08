@@ -127,9 +127,11 @@ The privacy switches are saved on the device, and they change how the app behave
 | Ghost protocol | Burns your messages when you sign out. An administrator turns this on. |
 | Lockdown | Only an administrator can post. |
 | Content filter | Holds a message that is mostly links. |
-| Suspend | A suspended handle cannot post. |
+| Suspend | A suspended handle cannot post. A report can suspend them when that privilege is on. |
 | Key rotation | Starts new message keys every six hours. |
 | Intercept mode | Records who sent something and how large it was. It does not keep the words. |
+| Announcements | A moderator or administrator can post an announcement on the news board. |
+| User reports | Anyone can report a post. A moderator can dismiss it or suspend the handle. |
 
 The house terminal is for the administrator. It is not a shell on the phone. Type `help`. From there you can list handles, lock the house down, suspend or restore a handle, post an announcement, and sweep house bitcoin to the saved payout address.
 

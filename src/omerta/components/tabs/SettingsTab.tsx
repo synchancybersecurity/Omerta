@@ -592,6 +592,45 @@ function DataWipe() {
   );
 }
 
+function ReportsInbox() {
+  const { userHandle, userRole } = useApp();
+  const [rows, setRows] = useState<Array<{ id: string; reporter: string; target: string; reason: string; status: string }>>([]);
+  const [open, setOpen] = useState(false);
+
+  const load = () => {
+    fetch("/api/reports?handle=" + encodeURIComponent(userHandle))
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => { if (Array.isArray(data)) setRows(data); })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    if (userRole === "admin" || userRole === "moderator") load();
+  }, [userHandle, userRole]);
+
+  if (userRole !== "admin" && userRole !== "moderator") return null;
+  const waiting = rows.filter((row) => row.status === "open");
+
+  return (
+    <div className="border rounded-lg p-3" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
+      <button type="button" onClick={() => { setOpen(!open); load(); }} className="font-mono text-sm" style={{ color: "hsl(var(--foreground))" }}>
+        Reports {waiting.length > 0 ? `(${waiting.length} open)` : ""}
+      </button>
+      {open && waiting.length === 0 && <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>No open reports.</p>}
+      {open && waiting.map((row) => (
+        <div key={row.id} className="mt-2 border rounded-sm p-2" style={{ borderColor: "hsl(var(--border))" }}>
+          <p className="font-mono text-[10px]" style={{ color: "hsl(var(--foreground))" }}>{row.reporter} reported {row.target}</p>
+          <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>{row.reason}</p>
+          <div className="flex gap-2 mt-2">
+            <button type="button" onClick={() => fetch("/api/reports/" + row.id + "/dismiss", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: userHandle }) }).then(load)} className="px-2 py-1 font-mono text-[10px] uppercase border rounded-sm" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }}>Dismiss</button>
+            <button type="button" onClick={() => fetch("/api/reports/" + row.id + "/suspend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: userHandle }) }).then(load)} className="px-2 py-1 font-mono text-[10px] uppercase rounded-sm" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>Suspend</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function SettingsTab() {
   const { userRole, theme, updateTheme, resetTheme, userHandle } = useApp();
   const isModerator = userRole === 'moderator' || userRole === 'admin';
@@ -638,6 +677,15 @@ export default function SettingsTab() {
     key_rotation: "keyRotation",
     intercept_mode: "intercept",
     ghost_protocol: "ghost",
+    announcements: "announcements",
+    user_reports: "userReports",
+  };
+
+  const privilegeField: Record<string, string> = {
+    content_filter: "modCanFilter",
+    user_reports: "modCanReports",
+    announcements: "modCanAnnounce",
+    suspend_users: "modCanSuspend",
   };
 
   useEffect(() => {
@@ -646,6 +694,12 @@ export default function SettingsTab() {
       setSettings(apply);
       setModeratorSettings(apply);
       setAdminSettings(apply);
+      setModeratorPrivileges({
+        content_filter: policy.modCanFilter !== false,
+        user_reports: policy.modCanReports !== false,
+        announcements: Boolean(policy.modCanAnnounce),
+        suspend_users: Boolean(policy.modCanSuspend),
+      });
     }).catch(() => {});
   }, [userHandle]);
 
@@ -675,7 +729,20 @@ export default function SettingsTab() {
     savePolicy(id, !s.enabled);
     return { ...s, enabled: !s.enabled };
   }));
-  const togglePrivilege = (key: keyof typeof moderatorPrivileges) => setModeratorPrivileges(prev => ({ ...prev, [key]: !prev[key] }));
+  const togglePrivilege = (key: keyof typeof moderatorPrivileges) => {
+    setModeratorPrivileges(prev => {
+      const enabled = !prev[key];
+      const field = privilegeField[key];
+      if (field) {
+        void fetch("/api/policy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle: userHandle, [field]: enabled }),
+        }).catch(() => {});
+      }
+      return { ...prev, [key]: enabled };
+    });
+  };
 
   const h = theme.accentHue, s = theme.accentSat, bg = theme.bgDarkness, panel = Math.min(bg + theme.panelBrightness * 0.5, 20), t = theme.textBrightness;
 
@@ -768,6 +835,7 @@ export default function SettingsTab() {
               {moderatorSettings.map((item) => (
                 <ToggleRow key={item.id} item={item} onToggle={toggleMod} accent />
               ))}
+              <ReportsInbox />
             </div>
           </DropdownSection>
         )}

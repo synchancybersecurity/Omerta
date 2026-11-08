@@ -20,6 +20,12 @@ type Policy = {
   keyRotation: boolean;
   contentFilter: boolean;
   suspendEnabled: boolean;
+  announcements: boolean;
+  userReports: boolean;
+  modCanFilter: boolean;
+  modCanReports: boolean;
+  modCanAnnounce: boolean;
+  modCanSuspend: boolean;
   autoSweep: boolean;
   lastRotation: number;
   lastSweep: number;
@@ -95,6 +101,7 @@ type Db = {
   wipes: Array<{ handle: string; at: number }>;
   policy: Policy;
   interceptLog: Array<{ t: number; handle: string; kind: string; bytes: number }>;
+  reports: Array<{ id: string; reporter: string; target: string; kind: string; reason: string; ref: string; status: string; timestamp: number }>;
 };
 
 type ChainPayment = {
@@ -275,6 +282,12 @@ function defaultPolicy(): Policy {
     keyRotation: false,
     contentFilter: false,
     suspendEnabled: false,
+    announcements: false,
+    userReports: false,
+    modCanFilter: true,
+    modCanReports: true,
+    modCanAnnounce: false,
+    modCanSuspend: false,
     autoSweep: false,
     lastRotation: 0,
     lastSweep: 0,
@@ -350,6 +363,7 @@ function emptyDb(): Db {
     wipes: [],
     policy: defaultPolicy(),
     interceptLog: [],
+    reports: [],
   };
 }
 
@@ -515,6 +529,7 @@ async function loadAsync() {
       if (!Array.isArray(db.wipes)) db.wipes = [];
       db.policy = { ...defaultPolicy(), ...(db.policy || {}) };
       if (!Array.isArray(db.interceptLog)) db.interceptLog = [];
+      if (!Array.isArray(db.reports)) db.reports = [];
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
@@ -1121,8 +1136,14 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (admin && body.intercept !== undefined) next.intercept = Boolean(body.intercept);
     if (admin && body.keyRotation !== undefined) next.keyRotation = Boolean(body.keyRotation);
     if (admin && body.autoSweep !== undefined) next.autoSweep = Boolean(body.autoSweep);
-    if (mod && body.contentFilter !== undefined) next.contentFilter = Boolean(body.contentFilter);
-    if (mod && body.suspendEnabled !== undefined) next.suspendEnabled = Boolean(body.suspendEnabled);
+    if (mod && body.contentFilter !== undefined && (admin || next.modCanFilter)) next.contentFilter = Boolean(body.contentFilter);
+    if (mod && body.suspendEnabled !== undefined && (admin || next.modCanSuspend)) next.suspendEnabled = Boolean(body.suspendEnabled);
+    if (body.announcements !== undefined && (admin || (mod && next.modCanAnnounce))) next.announcements = Boolean(body.announcements);
+    if (body.userReports !== undefined && (admin || (mod && next.modCanReports))) next.userReports = Boolean(body.userReports);
+    if (admin && body.modCanFilter !== undefined) next.modCanFilter = Boolean(body.modCanFilter);
+    if (admin && body.modCanReports !== undefined) next.modCanReports = Boolean(body.modCanReports);
+    if (admin && body.modCanAnnounce !== undefined) next.modCanAnnounce = Boolean(body.modCanAnnounce);
+    if (admin && body.modCanSuspend !== undefined) next.modCanSuspend = Boolean(body.modCanSuspend);
     db.policy = next;
     try { localStorage.setItem("omerta_tor_only", next.torOnly ? "1" : "0"); localStorage.setItem("omerta_policy", JSON.stringify(next)); } catch { /* private mode */ }
     save();
@@ -1141,6 +1162,86 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (db.policy?.forwardSecrecy) await rotateHandle(handle);
     save();
     return json({ success: true });
+  }
+
+  if (seg[0] === "reports" && method === "GET") {
+    const handle = q.get("handle") || "";
+    const user = db.users.find((item) => sameHandle(item.handle, handle));
+    const allowed = user && (user.role === "admin" || (user.role === "moderator" && db.policy?.modCanReports && db.policy?.userReports));
+    if (!allowed) return json({ error: "Denied" }, 403);
+    return json(db.reports || []);
+  }
+
+  if (seg[0] === "reports" && method === "POST" && seg.length === 1) {
+    const body = await readJson(input, init);
+    const reporter = String(body.reporter || "").trim();
+    const target = String(body.target || "").trim();
+    const reason = String(body.reason || "").trim().slice(0, 280);
+    if (!reporter || !target || !reason) return json({ error: "Say who and why" }, 400);
+    const stopped = guard(reporter, reason);
+    if (stopped) return stopped;
+    const row = { id: "rep" + nid(), reporter, target, kind: String(body.kind || "post"), reason, ref: String(body.ref || ""), status: "open", timestamp: Date.now() };
+    if (!Array.isArray(db.reports)) db.reports = [];
+    db.reports.unshift(row);
+    save();
+    return json(row);
+  }
+
+  if (seg[0] === "reports" && seg[2] === "dismiss" && method === "POST") {
+    const body = await readJson(input, init);
+    const user = db.users.find((item) => sameHandle(item.handle, body.handle));
+    if (!user || (user.role !== "admin" && user.role !== "moderator")) return json({ error: "Denied" }, 403);
+    const row = (db.reports || []).find((item) => item.id === seg[1]);
+    if (!row) return json({ error: "No such report" }, 404);
+    row.status = "dismissed";
+    save();
+    return json(row);
+  }
+
+  if (seg[0] === "reports" && seg[2] === "suspend" && method === "POST") {
+    const body = await readJson(input, init);
+    const user = db.users.find((item) => sameHandle(item.handle, body.handle));
+    const allowed = user && (user.role === "admin" || (user.role === "moderator" && db.policy?.modCanSuspend));
+    if (!allowed) return json({ error: "Denied" }, 403);
+    const row = (db.reports || []).find((item) => item.id === seg[1]);
+    if (!row) return json({ error: "No such report" }, 404);
+    const target = db.users.find((item) => sameHandle(item.handle, row.target));
+    if (target) target.suspended = true;
+    db.policy.suspendEnabled = true;
+    row.status = "suspended";
+    save();
+    return json(row);
+  }
+
+  if (seg[0] === "announce" && method === "POST") {
+    const body = await readJson(input, init);
+    const user = db.users.find((item) => sameHandle(item.handle, body.handle));
+    const allowed = user && (user.role === "admin" || (user.role === "moderator" && db.policy?.announcements && db.policy?.modCanAnnounce));
+    if (!allowed) return json({ error: "Announcements are off" }, 403);
+    const content = String(body.content || "").trim();
+    if (!content) return json({ error: "Write the announcement" }, 400);
+    const post: Post = {
+      id: "p" + nid(),
+      author: user.handle,
+      author_handle: user.handle,
+      author_avatar: null,
+      content,
+      emoji_encrypted: 0,
+      timestamp: Date.now(),
+      likes: 0,
+      dislikes: 0,
+      comments: 0,
+      shares: 0,
+      is_burned: 0,
+      burn_after: 0,
+      replies: [],
+      liked_by: [],
+      disliked_by: [],
+    };
+    (post as Post & { announcement?: number }).announcement = 1;
+    db.posts.unshift(post);
+    save();
+    return json(post);
   }
 
   if (seg[0] === "conversations" && seg.length === 1 && method === "GET") {

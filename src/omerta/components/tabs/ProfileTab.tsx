@@ -3,7 +3,7 @@ import { useApp } from '@omerta/store/AppContext';
 import { useApi } from '@omerta/store/ApiContext';
 import {
   Heart, MessageCircle, Share2, Send, Lock, Flame, Globe, MoreHorizontal,
-  Users, Shield, Pencil, Trash2, X, ChevronDown, ChevronUp, UserCircle, Hash,
+  Shield, Pencil, Trash2, X, ChevronDown, ChevronUp, UserCircle, Hash,
 } from 'lucide-react';
 import { emojiEncrypt } from '@omerta/utils/emojiCipher';
 import { AttachmentView, packAttachment } from '@omerta/components/Attachment';
@@ -51,6 +51,7 @@ interface Post {
   shares: number;
   is_burned: number;
   burn_after: number;
+  announcement?: number;
   liked_by?: string[];
   disliked_by?: string[];
 }
@@ -101,6 +102,7 @@ function PostCard({
   const [showMenu, setShowMenu] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [reportReason, setReportReason] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isEncrypted = post.emoji_encrypted === 1;
@@ -183,6 +185,7 @@ function PostCard({
               <h3 className="font-serif text-sm tracking-wider hover:underline" style={{ color: 'hsl(var(--foreground))' }}>{post.author}</h3>
             </button>
             <span className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{post.author_handle}</span>
+            {post.announcement === 1 && <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--primary))" }}>Announcement</span>}
           </div>
           <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{formatTime(post.timestamp)}</p>
         </div>
@@ -217,14 +220,22 @@ function PostCard({
                 </button>
               )}
               {!isMine && (
-                <button
-                  onClick={() => { onBurn(post.id); setShowMenu(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 font-mono text-xs transition-all text-left"
-                  style={{ color: 'hsl(var(--destructive))' }}
-                >
-                  <Flame size={14} />
-                  Report/Burn
-                </button>
+                <div className="px-3 py-2 space-y-2">
+                  <input value={reportReason} onChange={(e) => setReportReason(e.target.value)} placeholder="Why report this?" className="w-full rounded-sm px-2 py-1 font-mono text-[10px]" style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+                  <button
+                    onClick={() => {
+                      if (!reportReason.trim()) return;
+                      void fetch("/api/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reporter: currentUser, target: post.author_handle, kind: "post", reason: reportReason.trim(), ref: post.id }) });
+                      setReportReason("");
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 font-mono text-xs text-left"
+                    style={{ color: "hsl(var(--destructive))" }}
+                  >
+                    <Flame size={14} />
+                    Report
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -365,7 +376,7 @@ function PostCard({
 }
 
 export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) {
-  const { userHandle, editProfile, selectedAvatar, setSelectedAvatar, setActiveTab, setActiveConversation, viewingProfile, setViewingProfile } = useApp();
+  const { userHandle, userRole, editProfile, selectedAvatar, setSelectedAvatar, setActiveTab, setActiveConversation, viewingProfile, setViewingProfile } = useApp();
   const {
     posts, fetchPosts, createPost, deletePost, likePost, dislikePost,
     sharePost, replies, fetchReplies, createReply, fetchUserProfile, userProfiles,
@@ -492,6 +503,15 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
     }
   };
 
+  const [canAnnounce, setCanAnnounce] = useState(false);
+  useEffect(() => {
+    if (!userHandle) return;
+    fetch("/api/policy").then((res) => res.json()).then((policy) => {
+      const staff = userRole === "admin" || (userRole === "moderator" && policy?.announcements && policy?.modCanAnnounce);
+      setCanAnnounce(Boolean(staff));
+    }).catch(() => {});
+  }, [userHandle, userRole]);
+
   const handleCreatePost = () => {
     const written = newPostContent.trim();
     const content = postAttach ? (written ? `${written}\n\n${postAttach}` : postAttach) : written;
@@ -502,6 +522,16 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
     setBurnMode(false);
     setPostAttach(null);
     showToast('// POST PUBLISHED //');
+  };
+
+  const handleAnnounce = async () => {
+    const content = newPostContent.trim();
+    if (!content) return;
+    const res = await fetch("/api/announce", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: userHandle, content }) });
+    if (!res.ok) { showToast("// ANNOUNCEMENTS ARE OFF //"); return; }
+    setNewPostContent("");
+    fetchPosts();
+    showToast("// ANNOUNCEMENT POSTED //");
   };
 
   const handleViewProfile = async (handle: string) => {
@@ -866,9 +896,9 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
       <div className="px-4 md:px-6 mb-4">
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Encrypted', value: 'ON', icon: Lock },
-            { label: 'Operatives', value: '0', icon: Users },
-            { label: 'Security', value: 'ON', icon: Shield },
+            { label: 'Posts', value: String(posts.filter((item) => item.author === userHandle || item.author_handle === userHandle).length), icon: Globe },
+            { label: 'Private', value: 'E2E', icon: Lock },
+            { label: 'Board', value: 'LIVE', icon: Shield },
           ].map((stat) => {
             const Icon = stat.icon;
             return (
@@ -978,6 +1008,11 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
               <Send size={10} />
               Publish
             </button>
+            {canAnnounce && (
+              <button type="button" onClick={() => void handleAnnounce()} disabled={!newPostContent.trim()} className="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider rounded-sm border disabled:opacity-30" style={{ borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" }}>
+                Announce
+              </button>
+            )}
           </div>
         </div>
       </div>
