@@ -149,6 +149,18 @@ export default function MrktTab() {
     setBid("");
     setNotice("Bid accepted");
     await load();
+    const fee = Number((amount * 0.03).toFixed(2));
+    const house = await fetch("/api/house/settings").then((response) => response.json()).catch(() => null);
+    if (house?.feeWallet && fee > 0) {
+      try {
+        const result = await payHouseCut(house.chain || "base", house.feeWallet, fee);
+        if (result.tx) setNotice("House cut sent on chain");
+        else if (result.opened) setNotice("Approve the 3 percent USDC transfer in your wallet");
+        else if (result.error) setNotice(result.error);
+      } catch {
+        setNotice("The wallet refused the house cut");
+      }
+    }
   };
 
   const buyNow = async (lot: Listing) => {
@@ -334,7 +346,7 @@ export default function MrktTab() {
             <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>{open.status === "sold" ? "Sold for" : open.bids.length ? "Current bid" : "Opening price"}</p>
             <p className="font-serif text-4xl mt-1" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(open))}</p>
             <p className="font-mono text-xs mt-2" style={{ color: "hsl(var(--foreground))" }}>{statusLine(open)} · {open.bids.length} bids{open.winner ? " · " + open.winner : ""}</p>
-            <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>The house keeps 3 percent of the sale.</p>
+            <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>The house keeps 3 percent. A refund does not return it.</p>
           </div>
           {open.description && <p className="font-mono text-xs leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>{open.description}</p>}
           {open.status === "live" && open.seller.toLowerCase() !== me && (

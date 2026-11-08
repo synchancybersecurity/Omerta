@@ -125,7 +125,7 @@ function HouseEscrowSettings() {
   return (
     <div className="space-y-4 pt-2">
       <p className="font-mono text-[10px] leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>
-        The house keeps 3 percent of every auction sale and every escrow payment. On Base or Ethereum that cut is a USDC transfer to the wallet below. Your wallet must approve it. This app never holds the key.
+        The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not return that cut. On Base or Ethereum it is a USDC transfer. Your wallet must approve it. This app never holds the key.
       </p>
       <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
         <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>Credited to the house</span>

@@ -51,14 +51,26 @@ export default function EscrowTab() {
     setLoading(false);
     setShowCreate(false);
     setRecipient(''); setAmount(''); setDescription('');
-    showToast('// ESCROW CREATED //');
+    const fee = Number((Number(amount) * 0.03).toFixed(2));
+    if (houseSettings.feeWallet && fee > 0) {
+      try {
+        const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);
+        if (result.tx) showToast('House cut sent on chain');
+        else if (result.opened) showToast('Approve the USDC transfer in your wallet');
+        else showToast(result.error || '// ESCROW CREATED //');
+      } catch {
+        showToast('The wallet refused the house cut', 'error');
+      }
+    } else {
+      showToast('// ESCROW CREATED //');
+    }
   };
 
   const handleAction = async (id: string, action: 'release' | 'dispute' | 'cancel') => {
     const row = escrows.find((item) => item.id === id);
     await updateEscrow(id, action);
     await fetchEscrows(userHandle);
-    if (action === 'release' && row && String(row.sender).toLowerCase() === userHandle.trim().toLowerCase() && houseSettings.feeWallet) {
+    if ((action === 'release' || action === 'cancel') && row && String(row.sender).toLowerCase() === userHandle.trim().toLowerCase() && houseSettings.feeWallet) {
       const fee = Number((Number(row.amount) * 0.03).toFixed(2));
       try {
         const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);

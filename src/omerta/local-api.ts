@@ -701,6 +701,9 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       resolution_note: null,
     };
     db.escrows.unshift(escrow);
+    escrow.house_fee = creditHouse("escrow", String(escrow.id), amount, String(body.sender || ""));
+    escrow.house_fee_percent = 3;
+    escrow.net_amount = Number((amount - Number(escrow.house_fee)).toFixed(2));
     save();
     return json(escrow);
   }
@@ -713,7 +716,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     escrow.resolved_at = Date.now();
     escrow.resolved_by = body.adminHandle;
     escrow.resolution_note = body.note || "";
-    if (escrow.status === "released") {
+    if (escrow.status === "released" || escrow.status === "refunded" || escrow.status === "cancelled") {
       escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount), String(escrow.sender || ""));
       escrow.house_fee_percent = 3;
       escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
@@ -727,7 +730,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const escrow = db.escrows.find((e) => e.id === seg[1]);
     if (!escrow || !map[seg[2]]) return json({ error: "Not found" }, 404);
     escrow.status = map[seg[2]];
-    if (escrow.status === "released") {
+    if (escrow.status === "released" || escrow.status === "cancelled") {
       escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount), String(escrow.sender || ""));
       escrow.house_fee_percent = 3;
       escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
@@ -1025,6 +1028,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const minimum = nextBid(lot);
     if (!Number.isFinite(amount) || amount < minimum) return json({ error: "Bid at least $" + minimum.toFixed(2) }, 400);
     lot.bids.push({ id: "bid" + nid(), bidder, amount: Math.round(amount * 100) / 100, timestamp: Date.now() });
+    creditHouse("auction", lot.id + ":" + bidder.toLowerCase() + ":" + String(lot.bids.length), Math.round(amount * 100) / 100, bidder);
     save();
     return json(lot);
   }
