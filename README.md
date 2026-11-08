@@ -11,12 +11,18 @@
   &nbsp;
   <img src="https://img.shields.io/badge/AES%20sealed-B91C1C?style=for-the-badge&labelColor=0A0A0A&color=B91C1C" alt="AES sealed">
   &nbsp;
+  <img src="https://img.shields.io/badge/End%20to%20end-F0EBE6?style=for-the-badge&labelColor=0A0A0A&color=F0EBE6" alt="End to end">
+  &nbsp;
+  <img src="https://img.shields.io/badge/Bitcoin-F0EBE6?style=for-the-badge&labelColor=0A0A0A&color=F0EBE6" alt="Bitcoin">
+  &nbsp;
   <img src="https://img.shields.io/badge/Home%20screen%20app-F0EBE6?style=for-the-badge&labelColor=0A0A0A&color=F0EBE6" alt="Home screen app">
 </p>
 
 # Omertà
 
-Omertà is a private communications app for people who use a handle instead of a real name. It runs in the browser and can live on a phone home screen. Messages, files, and account records stay on the device. The stored vault is sealed with AES before it is written down.
+Omertà is a communications app for people who use a handle instead of a real name. It runs in the browser and can live on a phone home screen.
+
+Open chats, unlocked rooms, posts, and auctions are shared, so every phone sees the same ones. Private messages stay between the two handles. They are sealed end to end before they are stored, and they are not published. The vault on the phone is also sealed with AES. Passphrases never leave the device.
 
 **Live app:** [synchancybersecurity.github.io/Omerta](https://synchancybersecurity.github.io/Omerta/)
 
@@ -29,9 +35,9 @@ The interface is one dark room with a bottom bar. Sections stay available withou
 | Section | What it is for |
 |---|---|
 | Profile | Your handle, a portrait you upload, and the posts you publish. |
-| News | The shared feed on this device. A post can include writing, a picture, a video, or a file. |
-| Chat | The Lounge and any rooms you create. |
-| Message | Private conversations between two handles. |
+| News | The shared feed. A post can include writing, a picture, a video, or a file. |
+| Chat | The Lounge and any rooms. Open rooms are shared. Locked rooms keep their messages on the phone. |
+| Message | Private conversations between two handles. Always end to end encrypted. |
 | Contacts | Search for a handle and start a private thread. |
 | Escrow | Hold an amount between two handles until it is released, disputed, refunded, or cancelled. |
 | MRKT | An auction desk in the style of a public sale. List a lot, bid, buy it now, or watch the clock. |
@@ -39,7 +45,7 @@ The interface is one dark room with a bottom bar. Sections stay available withou
 
 ## Chat rooms
 
-The Lounge is open to every handle on the device. Any member may create another room and name it. A room may be left open, or locked with its own passphrase.
+The Lounge is open to every handle. Any member may create another room and name it. A room may be left open, or locked with its own passphrase. An open room is part of the public board. A locked room can be seen by name on other phones, but its messages stay on the phone where they were written.
 
 The creator can always return to a room they locked. Everyone else must enter the passphrase. A locked room does not hide the room name. It only keeps the conversation behind the passphrase.
 
@@ -49,15 +55,15 @@ Inside a room you can reply to a message, attach a picture or a file, or wrap th
 
 ## Messages, posts, and files
 
-Private messages, room messages, and news posts appear as soon as they are sent.
+Private messages and room messages appear as soon as they are sent. You do not have to leave the thread and come back.
 
-A post or a private message can carry a picture, a video, or another file. There is no size cap inside the app. The phone can still run out of space, and a very large clip can take a moment while it is sealed. Profile portraits are pictures you choose yourself.
+A post or a private message can carry a picture, a video, or another file. There is no size cap inside the app. The phone can still run out of space, and a very large clip can take a moment while it is sealed. Profile portraits are pictures you choose yourself. A picture or a clip in the vault does not travel to another phone. The writing does, when the message itself is public.
 
-A post or a private message can be marked to burn after it is read. A burned message is replaced with a burned notice. It is not restored.
+A private message is sealed end to end between the two handles before it is stored. Each handle has its own key, kept on that phone. What is saved is ciphertext. The sender and the other handle can both read it. Nobody else is given the text. A private text message is sealed the same way. This is not a switch. It is on for every private thread. Older private messages already on the phone are sealed the next time the app opens.
 
-A private message is sealed end to end between the two handles before it is stored. Each handle has its own key on the phone. The stored message is ciphertext. The sender and the other handle can read it. Nobody else is given the text, and it is not published on the public board. A text message is sealed the same way. The lounge, unlocked rooms, and posts stay readable by everyone, on purpose.
+The lounge, unlocked rooms, and posts stay readable by everyone. That is the public board, and it is public on purpose.
 
-An emoji locked message stays disguised until someone holds it. That person may hold it open twice. After the second time, the message burns and is replaced with a burned notice.
+An emoji locked message stays disguised until someone holds it. That person may hold it open twice. After the second time, the message burns and is replaced with a burned notice. It is not restored. A message marked to burn after it is read does the same once it has been read.
 
 If the phone tells the app that the signed in person took a screenshot, printed the page, or started a screen recording, the lounge writes a line with that person's name. The same names stay listed at the top of the chat. A capture the phone keeps to itself cannot be named.
 
