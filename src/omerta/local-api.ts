@@ -636,18 +636,19 @@ function save() {
   }
 }
 
-export async function grantLocalRole(handle: string, role: "admin" | "moderator" | "basic") {
+export async function grantLocalRole(handle: string, role: "admin" | "moderator" | "basic", passphrase?: string) {
   await ensureLoaded();
   const name = handle.trim();
   if (!name) return;
   const existing = db.users.find((u) => u.handle.toLowerCase() === name.toLowerCase());
   if (existing) {
     existing.role = role;
+    if (passphrase) existing.passphrase = passphrase;
   } else {
     db.users.push({
       id: nid(),
       handle: name,
-      passphrase: "session-" + nid(),
+      passphrase: passphrase || "session-" + nid(),
       role,
       created_at: Math.floor(Date.now() / 1000),
     });

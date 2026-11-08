@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useApp } from '@omerta/store/AppContext';
 import { grantLocalRole } from '@omerta/local-api';
 import { Zap, X } from 'lucide-react';
@@ -22,43 +22,46 @@ async function digest(value: string) {
 
 export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginProps) {
   const { setUserRole, login } = useApp();
-  const userRef = useRef<HTMLInputElement>(null);
-  const passRef = useRef<HTMLInputElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
-  const busy = useRef(false);
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const authenticate = async (e?: React.FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
-    if (busy.current) return;
-    busy.current = true;
+    if (busy) return;
+    const name = username.trim().toLowerCase();
+    const secret = password.trim();
+    if (!name || !secret) {
+      setError("// INVALID CREDENTIALS //");
+      return;
+    }
+    setBusy(true);
     setError("");
-    const form = e?.currentTarget || formRef.current;
-    const data = form ? new FormData(form) : null;
-    const username = String(data?.get("username") || userRef.current?.value || "").trim().toLowerCase();
-    const password = String(data?.get("passphrase") ?? passRef.current?.value ?? "").trim();
     try {
-      const hashed = await digest(password);
-      const match = doors.find((row) => row[0] === username && row[1] === hashed);
+      const hashed = await digest(secret);
+      const match = doors.find((row) => row[0] === name && row[1] === hashed);
       if (!match) {
         setError("// INVALID CREDENTIALS //");
         return;
       }
-      setUserRole(match[2]);
+      await grantLocalRole(match[3], match[2], secret);
       login(match[3]);
+      setUserRole(match[2]);
+      setUsername("");
+      setPassword("");
       onClose();
-      void grantLocalRole(match[3], match[2]).catch(() => {});
     } catch {
       setError("// INVALID CREDENTIALS //");
     } finally {
-      busy.current = false;
+      setBusy(false);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center px-4" style={{ background: "hsl(var(--background) / 0.95)" }}>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center px-4" style={{ background: "hsl(var(--background) / 0.95)" }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
       <div className="w-full max-w-sm rounded-xl p-6 border" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--primary) / 0.3)" }}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
@@ -68,13 +71,14 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
           <button type="button" onClick={onClose} className="font-mono text-xs px-2 py-1 rounded border" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }}><X size={16} /></button>
         </div>
         <p className="font-mono text-[10px] tracking-wider mb-4" style={{ color: "hsl(var(--muted-foreground))" }}>// SYSTEM ADMINISTRATOR LOGIN //</p>
-        <form ref={formRef} onSubmit={authenticate} className="space-y-4">
+        <form onSubmit={authenticate} className="space-y-4">
           <div>
             <label className="block font-mono text-[10px] uppercase tracking-wider mb-1" style={{ color: "hsl(var(--muted-foreground))" }}>Username</label>
             <input
-              ref={userRef}
               name="username"
               type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -88,9 +92,10 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
           <div>
             <label className="block font-mono text-[10px] uppercase tracking-wider mb-1" style={{ color: "hsl(var(--muted-foreground))" }}>Passphrase</label>
             <input
-              ref={passRef}
               name="passphrase"
               type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -104,13 +109,13 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
             <p className="font-mono text-xs text-center" style={{ color: "hsl(var(--destructive))" }}>{error}</p>
           )}
           <button
-            type="button"
-            onClick={() => void authenticate()}
-            className="w-full py-3 font-mono text-xs uppercase tracking-wider rounded-md"
+            type="submit"
+            disabled={busy}
+            className="w-full py-3 font-mono text-xs uppercase tracking-wider rounded-md disabled:opacity-50"
             style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}
           >
             <Zap size={14} className="inline mr-2" />
-            Authenticate
+            {busy ? "..." : "Authenticate"}
           </button>
         </form>
       </div>
