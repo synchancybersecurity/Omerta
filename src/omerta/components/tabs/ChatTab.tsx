@@ -4,20 +4,33 @@ import { useApi } from '@omerta/store/ApiContext';
 import { emojiEncrypt, emojiDecrypt } from '@omerta/utils/emojiCipher';
 import { Hash, Lock, Send, X, Reply, ChevronLeft, Plus, Trash2, Globe, Users, Paperclip } from 'lucide-react';
 import { AttachmentView, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
+import { decryptForRoom } from '@omerta/utils/crypto';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
-function RoomBubble({ msg, isMe, currentUserHandle, scope, onReply, onViewUser }: {
-  msg: { id: number; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; system?: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null };
+function RoomBubble({ msg, isMe, currentUserHandle, scope, roomKey, onReply, onViewUser }: {
+  msg: { id: number; sender_handle: string; content: string; timestamp: number; emoji_encrypted: number; e2e_encrypted?: number; system?: number; reply_to?: number | null; reply_content?: string | null; reply_sender?: string | null };
   isMe: boolean;
   currentUserHandle: string;
   scope: "chat" | "room";
+  roomKey?: string;
   onReply: (id: number, content: string, sender: string) => void;
   onViewUser?: (handle: string) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const [decrypted, setDecrypted] = useState(false);
-  const [burned, setBurned] = useState(msg.content === "// BURNED //");
+  const [opened, setOpened] = useState("");
+  useEffect(() => {
+    if (!roomKey || msg.e2e_encrypted !== 1) return;
+    let dead = false;
+    let payload: { iv: string; ciphertext: string } | null = null;
+    try { payload = JSON.parse(msg.content); } catch { payload = null; }
+    if (!payload) return;
+    decryptForRoom(payload, roomKey).then((text) => { if (!dead) setOpened(text); }).catch(() => {});
+    return () => { dead = true; };
+  }, [roomKey, msg.content, msg.e2e_encrypted]);
+  const shown = msg.e2e_encrypted === 1 ? (opened || "Encrypted room message") : msg.content;
+  const [burned, setBurned] = useState(shown === "// BURNED //");
   const viewed = useRef(false);
   const { userProfiles } = useApi();
 
@@ -55,8 +68,8 @@ function RoomBubble({ msg, isMe, currentUserHandle, scope, onReply, onViewUser }
   const displayContent = burned
     ? "// BURNED //"
     : isEncrypted
-    ? (decrypted ? emojiDecrypt(msg.content) || msg.content : msg.content)
-    : msg.content;
+    ? (decrypted ? emojiDecrypt(shown) || shown : shown)
+    : shown;
 
   return (
     <div className={`flex items-start gap-2 mb-2 ${isMe ? 'flex-row-reverse' : ''}`}>
@@ -149,6 +162,7 @@ export default function ChatTab() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [passwordRoom, setPasswordRoom] = useState<string | null>(null);
+  const [roomKeys, setRoomKeys] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -246,6 +260,15 @@ export default function ChatTab() {
       setPasswordRoom(roomId);
       return;
     }
+    if (isLocked) {
+      void fetch(`/api/chat-rooms/${roomId}/key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle: userHandle }),
+      }).then((res) => res.json()).then((data) => {
+        if (data.key) setRoomKeys((prev) => ({ ...prev, [roomId]: data.key }));
+      }).catch(() => {});
+    }
     setActiveRoomId(roomId);
     setShowRoomList(false);
   };
@@ -260,6 +283,7 @@ export default function ChatTab() {
       });
       const data = await res.json();
       if (data.valid) {
+        if (data.key) setRoomKeys((prev) => ({ ...prev, [passwordRoom]: data.key }));
         setActiveRoomId(passwordRoom);
         setShowRoomList(false);
         setPasswordRoom(null);
@@ -558,6 +582,7 @@ export default function ChatTab() {
             isMe={msg.sender_handle === userHandle || msg.sender_handle === 'ANON'}
             currentUserHandle={userHandle}
             scope={activeRoomId === "general" ? "chat" : "room"}
+            roomKey={activeRoomId ? roomKeys[activeRoomId] || "" : ""}
             onReply={(id, content, sender) => { setReplyingTo({ id, content, sender }); inputRef.current?.focus(); }}
             onViewUser={(h) => setProfileUser({ handle: h })}
           />

@@ -50,6 +50,25 @@ const USAGE_KEY = "file-usage";
 
 type FileRec = { bytes: number; mime: string; iv: ArrayBuffer; data: ArrayBuffer };
 
+export async function deleteVaultFile(id: string) {
+  const db = await openDb();
+  const rec = await new Promise<FileRec | null>((resolve, reject) => {
+    const request = db.transaction(FILES, "readonly").objectStore(FILES).get(id);
+    request.onsuccess = () => resolve((request.result as FileRec) || null);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(FILES, "readwrite");
+    tx.objectStore(FILES).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  if (rec) {
+    const used = Number(await vaultGet(USAGE_KEY)) || 0;
+    await vaultSet(USAGE_KEY, String(Math.max(0, used - (rec.bytes || 0))));
+  }
+}
+
 export async function storeVaultFile(plain: ArrayBuffer, mime: string) {
   const used = Number(await vaultGet(USAGE_KEY)) || 0;
   const sealed = await sealBytes(plain);

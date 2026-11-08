@@ -3,6 +3,7 @@ import { ApiProvider } from '@omerta/store/ApiContext';
 import MatrixBackground from '@omerta/components/MatrixBackground';
 import LoginScreen from '@omerta/components/LoginScreen';
 import MainShell from '@omerta/components/MainShell';
+import AntiScreenshotOverlay from '@omerta/components/AntiScreenshotOverlay';
 
 function AppContent() {
   const { isAuthenticated } = useApp();
@@ -28,6 +29,7 @@ export default function App() {
   return (
     <AppProvider>
       <ApiProvider>
+        <AntiScreenshotOverlay />
         <AppContent />
       </ApiProvider>
     </AppProvider>

@@ -16,6 +16,7 @@ export default function CaptureWatch() {
       if (now - lastNote < 2500) return;
       lastNote = now;
       void reportCapture(userHandle, kind);
+      window.dispatchEvent(new Event("omerta-blank"));
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "PrintScreen" || event.code === "PrintScreen") note("screenshot");

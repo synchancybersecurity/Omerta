@@ -69,6 +69,7 @@ export function formatBtc(value: number) {
 }
 
 async function btcPrice() {
+  if (!clearnetOpen()) throw new Error("Tor only is on, so the price feed is blocked");
   const res = await fetch(MEMPOOL + "/v1/prices");
   if (!res.ok) throw new Error("The bitcoin price did not load");
   const data = await res.json();
@@ -77,11 +78,16 @@ async function btcPrice() {
   return usd;
 }
 
+function clearnetOpen() {
+  try { return localStorage.getItem("omerta_tor_only") !== "1"; } catch { return true; }
+}
+
 export async function spotUsd() {
   return btcPrice();
 }
 
 export async function readHouseBalance(address: string) {
+  if (!clearnetOpen()) throw new Error("Tor only is on, so the balance check is blocked");
   if (!isBtcAddress(address)) throw new Error("The house wallet is not a bitcoin address");
   const res = await fetch(MEMPOOL + "/address/" + address);
   if (!res.ok) throw new Error("Bitcoin did not answer");
@@ -103,6 +109,7 @@ export async function payHouseCut(address: string, btc: number): Promise<{ tx?: 
 type Utxo = { txid: string; vout: number; value: number; status?: { confirmed?: boolean } };
 
 export async function exportHouseBtc(key: string, to: string, amount?: number) {
+  if (!clearnetOpen()) throw new Error("Tor only is on, so the export is blocked");
   if (!isBtcAddress(to)) throw new Error("That payout address is not a bitcoin address");
   const privateKey = hexToBytes(key);
   const from = getAddress("wpkh", privateKey);

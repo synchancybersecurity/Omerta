@@ -600,9 +600,9 @@ export default function SettingsTab() {
   const [settings, setSettings] = useState<ToggleSetting[]>([
     { id: 'notifications', label: 'Notifications', description: 'Alert on new encrypted messages', icon: Bell, enabled: true },
     { id: 'burn_default', label: 'Burn by Default', description: 'Auto-enable burn-after-read on all sent messages', icon: Eye, enabled: false },
-    { id: 'tor_only', label: 'Tor Only', description: 'Block all non-Tor network traffic', icon: Globe, enabled: true },
-    { id: 'sound', label: 'Sound Effects', description: 'Play tones on message events', icon: Volume2, enabled: false },
-    { id: 'forward_secrecy', label: 'Forward Secrecy', description: 'Rotate keys after every session', icon: Shield, enabled: true },
+    { id: 'tor_only', label: 'Tor Only', description: 'Block price checks, bitcoin exports, and the public board', icon: Globe, enabled: false },
+    { id: 'sound', label: 'Sound Effects', description: 'Play a tone when a new lounge message arrives', icon: Volume2, enabled: false },
+    { id: 'forward_secrecy', label: 'Forward Secrecy', description: 'Start a new message key when you sign out', icon: Shield, enabled: false },
   ]);
 
   const [moderatorSettings, setModeratorSettings] = useState<ToggleSetting[]>([
@@ -614,8 +614,8 @@ export default function SettingsTab() {
 
   const [adminSettings, setAdminSettings] = useState<ToggleSetting[]>([
     { id: 'global_lockdown', label: 'Global Lockdown', description: 'Disable all non-admin communication channels', icon: Lock, enabled: false },
-    { id: 'key_rotation', label: 'Auto Key Rotation', description: 'Rotate encryption keys every 6 hours', icon: KeyRound, enabled: true },
-    { id: 'intercept_mode', label: 'Intercept Mode', description: 'Log all encrypted traffic for analysis', icon: Radio, enabled: false },
+    { id: 'key_rotation', label: 'Auto Key Rotation', description: 'Start new message keys every 6 hours', icon: KeyRound, enabled: false },
+    { id: 'intercept_mode', label: 'Intercept Mode', description: 'Log who sent traffic, and how large it was. Not the text.', icon: Radio, enabled: false },
     { id: 'ghost_protocol', label: 'Ghost Protocol', description: 'Auto-burn all messages on session end', icon: UserX, enabled: false },
   ]);
 
@@ -626,9 +626,55 @@ export default function SettingsTab() {
     suspend_users: false,
   });
 
-  const toggle = (id: string) => setSettings(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
-  const toggleMod = (id: string) => setModeratorSettings(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
-  const toggleAdmin = (id: string) => setAdminSettings(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
+  const policyField: Record<string, string> = {
+    notifications: "notifications",
+    burn_default: "burnDefault",
+    tor_only: "torOnly",
+    sound: "sound",
+    forward_secrecy: "forwardSecrecy",
+    content_filter: "contentFilter",
+    suspend_users: "suspendEnabled",
+    global_lockdown: "lockdown",
+    key_rotation: "keyRotation",
+    intercept_mode: "intercept",
+    ghost_protocol: "ghost",
+  };
+
+  useEffect(() => {
+    fetch("/api/policy").then((res) => res.json()).then((policy) => {
+      const apply = (rows: ToggleSetting[]) => rows.map((row) => policyField[row.id] ? { ...row, enabled: Boolean(policy[policyField[row.id]]) } : row);
+      setSettings(apply);
+      setModeratorSettings(apply);
+      setAdminSettings(apply);
+    }).catch(() => {});
+  }, [userHandle]);
+
+  const savePolicy = (id: string, enabled: boolean) => {
+    const field = policyField[id];
+    if (!field) return;
+    if (id === "notifications" && enabled && "Notification" in window) void Notification.requestPermission();
+    void fetch("/api/policy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: userHandle, [field]: enabled }),
+    }).catch(() => {});
+  };
+
+  const toggle = (id: string) => setSettings(prev => prev.map(s => {
+    if (s.id !== id) return s;
+    savePolicy(id, !s.enabled);
+    return { ...s, enabled: !s.enabled };
+  }));
+  const toggleMod = (id: string) => setModeratorSettings(prev => prev.map(s => {
+    if (s.id !== id) return s;
+    savePolicy(id, !s.enabled);
+    return { ...s, enabled: !s.enabled };
+  }));
+  const toggleAdmin = (id: string) => setAdminSettings(prev => prev.map(s => {
+    if (s.id !== id) return s;
+    savePolicy(id, !s.enabled);
+    return { ...s, enabled: !s.enabled };
+  }));
   const togglePrivilege = (key: keyof typeof moderatorPrivileges) => setModeratorPrivileges(prev => ({ ...prev, [key]: !prev[key] }));
 
   const h = theme.accentHue, s = theme.accentSat, bg = theme.bgDarkness, panel = Math.min(bg + theme.panelBrightness * 0.5, 20), t = theme.textBrightness;
@@ -703,14 +749,14 @@ export default function SettingsTab() {
                 <AlertTriangle size={12} style={{ color: 'hsl(var(--destructive))' }} />
                 <span className="font-mono text-[10px] uppercase" style={{ color: 'hsl(var(--destructive))' }}>Warning</span>
               </div>
-              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Disabling Tor Only or Forward Secrecy may expose your traffic to network analysis.</p>
+              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Private threads are sealed. Open rooms stay public. Tor only stops the price feed, exports, and the public board.</p>
             </div>
             <div className="p-3 border rounded-lg" style={{ borderColor: 'hsl(142, 76%, 36%)', background: 'hsl(var(--background))' }}>
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle size={12} style={{ color: 'hsl(142, 76%, 36%)' }} />
                 <span className="font-mono text-[10px] uppercase" style={{ color: 'hsl(142, 76%, 36%)' }}>Security Audit</span>
               </div>
-              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>All systems operational. Encryption verified. No anomalies detected in last 72 hours.</p>
+              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>A switch does something only after it is saved. The terminal can announce, suspend, and sweep.</p>
             </div>
           </div>
         </DropdownSection>

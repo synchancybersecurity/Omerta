@@ -13,6 +13,7 @@ export default function MessageTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<Record<string, unknown>>>([]);
   const [searching, setSearching] = useState(false);
+  const [phone, setPhone] = useState("");
 
   const hasActiveChat = !!activeConversationId;
 
@@ -52,6 +53,15 @@ export default function MessageTab() {
             <Search size={12} style={{ color: 'hsl(var(--muted-foreground))' }} />
             <span className="font-mono text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>Search messages...</span>
           </div>
+          <form className="flex gap-2 mt-2" onSubmit={(e) => {
+            e.preventDefault();
+            const number = phone.replace(/[^\d+]/g, "");
+            if (number.length < 7) return;
+            window.location.href = "sms:" + number;
+          }}>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="Phone number" className="flex-1 rounded-sm px-2 py-1.5 font-mono text-[10px]" style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+            <button type="submit" className="px-2 rounded-sm font-mono text-[10px] uppercase" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>Text</button>
+          </form>
         </div>
 
         {/* Search overlay */}

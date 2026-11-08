@@ -348,15 +348,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loadSettingsFromServer, requestNotificationPermission]);
 
   const logout = useCallback(() => {
+    const handle = userHandle;
+    if (handle) {
+      void fetch("/api/session/end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      }).catch(() => {});
+    }
     setIsAuthenticated(false);
     setUserHandle('');
     setActiveConversationId(null);
     setConversations(INITIAL_CONVERSATIONS);
     setOpenChatMessages(INITIAL_OPEN_CHAT);
     setUserRole('basic');
-    setUserRole('basic');
     setUnreadCounts({ message: 0, chat: 0, sms: 0, contacts: 0 });
-  }, []);
+  }, [userHandle]);
 
   const setActiveConversation = useCallback((id: string) => {
     setActiveConversationId(id);

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { cue } from '@omerta/utils/cue';
 import { useApp } from '@omerta/store/AppContext';
 
 interface Reply {
@@ -218,13 +219,19 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     } catch { return null; }
   }, []);
 
+  const seenChat = useRef("");
   const fetchOpenChat = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/open-chat`);
       const data = await res.json();
-      setOpenChatMessages(Array.isArray(data) ? data : []);
+      const rows = Array.isArray(data) ? data : [];
+      const last = rows[rows.length - 1];
+      const marker = last ? String(last.id) : "";
+      if (seenChat.current && marker && marker !== seenChat.current && last.sender_handle !== userHandle) cue("New message in the lounge");
+      seenChat.current = marker;
+      setOpenChatMessages(rows);
     } catch { /* silently fail */ }
-  }, []);
+  }, [userHandle]);
 
   const fetchMessages = useCallback(async (conversationId: number) => {
     try {

@@ -135,6 +135,11 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+export async function roomKeyFromPassphrase(password: string, roomId: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(roomId + "\n" + password));
+  return arrayBufferToBase64(digest);
+}
+
 export async function encryptForRoom(plaintext: string, roomKey: string): Promise<{ iv: string; ciphertext: string }> {
   // Room encryption: single symmetric key shared among room members
   const keyData = base64ToArrayBuffer(roomKey);

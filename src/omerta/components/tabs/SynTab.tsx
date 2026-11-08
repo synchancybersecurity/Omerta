@@ -10,9 +10,8 @@ interface HistoryEntry {
 }
 
 const WELCOME = [
-  '// SYN v1.0 // TERMINAL ACCESS //',
-  '// HOST: ANDROID (TERMUX) //',
-  'Commands execute on the server device.',
+  'House terminal. These commands run inside Omertà.',
+  'Type help.',
   '',
 ];
 
@@ -101,7 +100,7 @@ export default function SynTab() {
       e.preventDefault();
       // Simple tab completion hint
       const cmd = input.trim().split(' ')[0];
-      const commands = ['ls', 'cd', 'pwd', 'cat', 'echo', 'mkdir', 'rm', 'cp', 'mv', 'whoami', 'uname', 'ps', 'top', 'clear', 'termux-info', 'pkg', 'apt', 'curl', 'wget', 'git', 'node', 'python', 'ssh'];
+      const commands = ['help', 'whoami', 'users', 'house', 'rooms', 'lockdown', 'suspend', 'unsuspend', 'autosweep', 'sweep', 'announce', 'log', 'clear'];
       const match = commands.find(c => c.startsWith(cmd));
       if (match) setInput(match + ' ');
     } else if (e.key === 'l' && e.ctrlKey) {

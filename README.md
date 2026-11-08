@@ -113,6 +113,20 @@ Changing the number of days while it is armed asks you to confirm, because that 
 
 Public posts and auctions removed by the switch are dropped on other phones too. Private messages are removed on the phone where they were stored.
 
+## What the switches do
+
+The security switches now do what they say. Tor only stops the bitcoin price feed, wallet exports, and the public board. Burn by default marks new private messages to burn. Sound plays a short tone when a lounge message arrives. Notifications ask the phone for permission. Forward secrecy starts a new message key when you sign out, and the old key stays on the phone so older threads still open. Ghost protocol burns your messages when you sign out. Lockdown lets only an admin post. The content filter holds a message that is mostly links. Suspend blocks a handle from posting. Key rotation starts new message keys every six hours. Intercept mode writes who sent something and how large it was. It does not keep the text. Auto sweep, from the terminal, sends house bitcoin to the saved payout address.
+
+The house terminal runs those commands. It is not a shell on the phone. Type help.
+
+A locked room's messages are sealed with the room passphrase. The creator and anyone who enters the passphrase can read them.
+
+A screenshot or a reported recording turns the screen black until you tap to return. Leaving the app also shows black. A phone can still take a shot before the page is told.
+
+Text a phone number from the message tab. That opens the phone's own texting app. It is not sent by Omertà.
+
+The dead man's switch also deletes pictures and clips that were attached to the wiped messages when it can still open them.
+
 ## Install
 
 Omertà can be added to a phone home screen.

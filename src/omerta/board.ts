@@ -2,7 +2,7 @@ import { schnorr } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes, randomBytes } from "@noble/hashes/utils.js";
 
-const RELAYS = ["wss://relay.damus.io", "wss://relay.primal.net", "wss://nos.lol"];
+const RELAYS = ["wss://relay.damus.io", "wss://relay.primal.net", "wss://nos.lol", "wss://relay.nostr.band", "wss://nostr.wine"];
 const TAG = "omerta-public";
 
 export type PublicBoard = {
@@ -53,6 +53,7 @@ function parseBoard(content: string): PublicBoard | null {
 
 export function exchangeBoard(mine: PublicBoard): Promise<PublicBoard[]> {
   if (typeof WebSocket === "undefined") return Promise.resolve([]);
+  try { if (localStorage.getItem("omerta_tor_only") === "1") return Promise.resolve([]); } catch { /* storage can be blocked */ }
   const content = JSON.stringify(mine);
   const { secret, pubkey } = keypair();
   const event = sign(pubkey, content, secret);

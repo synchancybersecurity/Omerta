@@ -1,12 +1,29 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
-import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
+import { vaultGet, vaultSet, storeVaultFile, deleteVaultFile } from "@omerta/vault-store";
 import { exchangeBoard, type PublicBoard } from "@omerta/board";
-import { encryptMessage, exportPrivateKey, exportPublicKey, generateKeyPair, importPrivateKey, importPublicKey } from "@omerta/utils/crypto";
+import { encryptMessage, encryptForRoom, exportPrivateKey, exportPublicKey, generateKeyPair, importPrivateKey, importPublicKey, openPrivate, roomKeyFromPassphrase } from "@omerta/utils/crypto";
 import { asBitcoinWallet, createHouseWallet, exportHouseBtc, isBtcAddress, restoreHouseWallet, spotUsd } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
 
-type User = { id: number; handle: string; passphrase: string; role: string; created_at: number };
+type User = { id: number; handle: string; passphrase: string; role: string; created_at: number; suspended?: boolean };
+
+type Policy = {
+  lockdown: boolean;
+  torOnly: boolean;
+  ghost: boolean;
+  forwardSecrecy: boolean;
+  burnDefault: boolean;
+  notifications: boolean;
+  sound: boolean;
+  intercept: boolean;
+  keyRotation: boolean;
+  contentFilter: boolean;
+  suspendEnabled: boolean;
+  autoSweep: boolean;
+  lastRotation: number;
+  lastSweep: number;
+};
 type Conv = { id: number; user1_handle: string; user2_handle: string; created_at: number };
 type Msg = {
   id: number;
@@ -71,11 +88,13 @@ type Db = {
   houseWallet: { address: string; key: string; phrase?: string } | null;
   payoutWallets: string[];
   publicKeys: Record<string, string>;
-  userKeys: Record<string, { publicKey: string; privateKey: string }>;
+  userKeys: Record<string, { publicKey: string; privateKey: string; history?: Array<{ publicKey: string; privateKey: string }> }>;
   listings: Listing[];
   moneyUnit?: "btc";
   captures: Array<{ id: string; handle: string; kind: "screenshot" | "recording"; timestamp: number }>;
   wipes: Array<{ handle: string; at: number }>;
+  policy: Policy;
+  interceptLog: Array<{ t: number; handle: string; kind: string; bytes: number }>;
 };
 
 type ChainPayment = {
@@ -243,6 +262,25 @@ function touchMarket() {
   if (changed) save();
 }
 
+function defaultPolicy(): Policy {
+  return {
+    lockdown: false,
+    torOnly: false,
+    ghost: false,
+    forwardSecrecy: false,
+    burnDefault: false,
+    notifications: true,
+    sound: false,
+    intercept: false,
+    keyRotation: false,
+    contentFilter: false,
+    suspendEnabled: false,
+    autoSweep: false,
+    lastRotation: 0,
+    lastSweep: 0,
+  };
+}
+
 function emptyDb(): Db {
   const now = Date.now();
   return {
@@ -310,6 +348,8 @@ function emptyDb(): Db {
     listings: [],
     captures: [],
     wipes: [],
+    policy: defaultPolicy(),
+    interceptLog: [],
   };
 }
 
@@ -473,6 +513,8 @@ async function loadAsync() {
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
       if (!db.userKeys) db.userKeys = {};
       if (!Array.isArray(db.wipes)) db.wipes = [];
+      db.policy = { ...defaultPolicy(), ...(db.policy || {}) };
+      if (!Array.isArray(db.interceptLog)) db.interceptLog = [];
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
@@ -492,6 +534,7 @@ async function loadAsync() {
     db.moneyUnit = "btc";
   }
   try { await sealPlainPrivate(); } catch { /* leave an unreadable private message sealed on the next open */ }
+  try { await sealLockedRooms(); } catch { /* a locked room can be sealed on the next open */ }
   loaded = true;
   startBoard();
 }
@@ -714,12 +757,121 @@ function eraseUser(handle: string, at: number) {
   }
 }
 
-function wipeIfDue() {
+function denySend(handle: string) {
+  const user = db.users.find((item) => sameHandle(item.handle, handle));
+  if (db.policy?.suspendEnabled && user?.suspended) return "This handle is suspended";
+  if (db.policy?.lockdown && user?.role !== "admin") return "The house is locked down";
+  return "";
+}
+
+function guard(handle: string, text = "") {
+  const reason = denySend(handle) || heldByFilter(text);
+  if (reason) return json({ error: reason }, 403);
+  noteTraffic(handle, "send", String(text || "").length);
+  return null;
+}
+
+function heldByFilter(text: string) {
+  if (!db.policy?.contentFilter) return "";
+  const links = String(text || "").match(/https?:\/\//gi) || [];
+  if (links.length >= 4) return "That message was held by the content filter";
+  return "";
+}
+
+function noteTraffic(handle: string, kind: string, bytes: number) {
+  if (!db.policy?.intercept) return;
+  if (!Array.isArray(db.interceptLog)) db.interceptLog = [];
+  db.interceptLog.push({ t: Date.now(), handle, kind, bytes });
+  if (db.interceptLog.length > 200) db.interceptLog.splice(0, db.interceptLog.length - 200);
+}
+
+function vaultIdsIn(text: unknown, into: Set<string>) {
+  for (const match of String(text || "").matchAll(/vault:([A-Za-z0-9]+)/g)) into.add(match[1]);
+}
+
+async function dropOwnedFiles(handle: string, at: number) {
+  const ids = new Set<string>();
+  const mine = Object.entries(db.userKeys || {}).find(([key]) => sameHandle(key, handle))?.[1];
+  for (const post of db.posts) {
+    if ((sameHandle(post.author, handle) || sameHandle(post.author_handle, handle)) && post.timestamp <= at) vaultIdsIn(post.content, ids);
+  }
+  for (const lot of db.listings) {
+    if (sameHandle(lot.seller, handle) && lot.created_at <= at) vaultIdsIn(lot.image, ids);
+  }
+  const rows = [
+    ...db.messages.filter((msg) => sameHandle(msg.sender_handle, handle) && msg.timestamp <= at),
+    ...db.openChatMessages.filter((msg) => sameHandle(msg.sender_handle, handle) && Number(msg.timestamp) <= at),
+    ...db.roomMessages.filter((msg) => sameHandle(msg.sender_handle, handle) && Number(msg.timestamp) <= at),
+    ...db.smsMessages.filter((msg) => sameHandle(msg.sender_handle, handle) && Number(msg.timestamp) <= at),
+  ];
+  for (const msg of rows) {
+    if (msg.e2e_encrypted && mine?.privateKey) {
+      try {
+        const opened = await openPrivate(JSON.parse(String(msg.content || "")), await importPrivateKey(mine.privateKey), mine.publicKey);
+        vaultIdsIn(opened.body, ids);
+        vaultIdsIn(opened.reply, ids);
+        continue;
+      } catch { /* a sealed file stays if this key cannot open it */ }
+    }
+    vaultIdsIn(msg.content, ids);
+  }
+  for (const id of ids) {
+    try { await deleteVaultFile(id); } catch { /* the record may already be gone */ }
+  }
+}
+
+async function rotateHandle(handle: string) {
+  const key = Object.keys(db.userKeys || {}).find((item) => sameHandle(item, handle));
+  if (!key) return;
+  const current = db.userKeys[key];
+  const history = Array.isArray(current.history) ? current.history : [];
+  history.push({ publicKey: current.publicKey, privateKey: current.privateKey });
+  const pair = await generateKeyPair();
+  current.history = history.slice(-6);
+  current.publicKey = await exportPublicKey(pair.publicKey);
+  current.privateKey = await exportPrivateKey(pair.privateKey);
+  db.publicKeys[key] = current.publicKey;
+}
+
+async function maybeRotate() {
+  if (!db.policy?.keyRotation || Date.now() - Number(db.policy.lastRotation || 0) < 6 * 60 * 60 * 1000) return;
+  for (const handle of Object.keys(db.userKeys || {})) await rotateHandle(handle);
+  db.policy.lastRotation = Date.now();
+  save();
+}
+
+async function maybeSweep() {
+  if (!db.policy?.autoSweep || Date.now() - Number(db.policy.lastSweep || 0) < 60 * 60 * 1000) return;
+  db.policy.lastSweep = Date.now();
+  const to = db.houseSettings.feeWallet || db.houseSettings.holdingWallet;
+  const key = db.houseWallet?.key;
+  save();
+  if (!to || !key || !isBtcAddress(to)) return;
+  try { await exportHouseBtc(key, to); } catch { /* the coins stay in the house wallet */ }
+}
+
+async function sealLockedRooms() {
+  let changed = false;
+  for (const room of db.chatRooms) {
+    if (!room.is_locked || !room.password) continue;
+    const key = await roomKeyFromPassphrase(room.password, room.id);
+    for (const msg of db.roomMessages) {
+      if (msg.room_id !== room.id || msg.e2e_encrypted || msg.sender_handle === "notice") continue;
+      msg.content = JSON.stringify(await encryptForRoom(String(msg.content || ""), key));
+      msg.e2e_encrypted = 1;
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+
+async function wipeIfDue() {
   const now = Date.now();
   let changed = false;
   for (const [handle, settings] of Object.entries(db.userSettings || {})) {
     if (!settings?.wipeEnabled || !settings.wipeAt || now < Number(settings.wipeAt)) continue;
     const days = Math.min(7, Math.max(1, Math.round(Number(settings.wipeDays) || 1)));
+    await dropOwnedFiles(handle, now);
     eraseUser(handle, now);
     for (const key of Object.keys(db.userSettings)) {
       if (!sameHandle(key, handle)) continue;
@@ -728,6 +880,97 @@ function wipeIfDue() {
     changed = true;
   }
   if (changed) save();
+}
+
+async function runSyn(command: string) {
+  const [name, ...rest] = command.trim().split(/\s+/);
+  const arg = rest.join(" ").trim();
+  if (!name || name === "help") {
+    return [
+      "help                 show these house commands",
+      "whoami               show the signed-in admin",
+      "users                list handles and roles",
+      "house                show the house wallet and books",
+      "rooms                list rooms",
+      "lockdown on|off      block every channel except the admin",
+      "suspend <handle>     suspend a handle",
+      "unsuspend <handle>   lift a suspension",
+      "autosweep on|off     send house bitcoin to the saved payout address each hour",
+      "sweep                send the house bitcoin now",
+      "announce <text>      post a notice on the news board",
+      "log                  show the encrypted traffic log",
+      "clear                clear that log",
+    ].join("\n");
+  }
+  if (name === "whoami") return "flint\nadmin\n";
+  if (name === "users") return db.users.map((user) => user.handle + "  " + (user.role || "basic") + (user.suspended ? "  suspended" : "")).join("\n") + "\n";
+  if (name === "house") {
+    const wallet = db.houseWallet?.address || "none";
+    const payout = db.houseSettings.feeWallet || db.houseSettings.holdingWallet || "none";
+    const book = (db.houseDeposits || []).reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+    return "wallet " + wallet + "\npayout " + payout + "\nauto sweep " + (db.policy?.autoSweep ? "on" : "off") + "\nbook " + book.toFixed(8) + " BTC\n";
+  }
+  if (name === "rooms") return db.chatRooms.map((room) => (room.is_locked ? "locked  " : "open    ") + room.name).join("\n") + "\n";
+  if (name === "lockdown") {
+    db.policy.lockdown = arg === "on";
+    save();
+    return "lockdown " + (db.policy.lockdown ? "on" : "off") + "\n";
+  }
+  if (name === "autosweep") {
+    db.policy.autoSweep = arg === "on";
+    save();
+    return "auto sweep " + (db.policy.autoSweep ? "on" : "off") + "\n";
+  }
+  if (name === "suspend" || name === "unsuspend") {
+    const user = db.users.find((item) => sameHandle(item.handle, arg));
+    if (!user) return "No such handle\n";
+    user.suspended = name === "suspend";
+    db.policy.suspendEnabled = true;
+    save();
+    return user.handle + (user.suspended ? " suspended\n" : " restored\n");
+  }
+  if (name === "sweep") {
+    const to = db.houseSettings.feeWallet || db.houseSettings.holdingWallet;
+    if (!to || !db.houseWallet?.key) return "Set a payout address first\n";
+    try {
+      const tx = await exportHouseBtc(db.houseWallet.key, to);
+      return "sent " + tx + "\n";
+    } catch (err) {
+      return (err instanceof Error ? err.message : "The sweep did not send") + "\n";
+    }
+  }
+  if (name === "announce") {
+    if (!arg) return "Write the announcement after the command\n";
+    db.posts.unshift({
+      id: "p" + nid(),
+      author: "Flint",
+      author_handle: "flint",
+      author_avatar: null,
+      content: arg,
+      emoji_encrypted: 0,
+      timestamp: Date.now(),
+      likes: 0,
+      dislikes: 0,
+      comments: 0,
+      shares: 0,
+      is_burned: 0,
+      burn_after: 0,
+      replies: [],
+      liked_by: [],
+      disliked_by: [],
+    });
+    save();
+    return "posted\n";
+  }
+  if (name === "log") {
+    return (db.interceptLog || []).slice(-30).map((row) => new Date(row.t).toISOString() + "  " + row.handle + "  " + row.kind + "  " + row.bytes).join("\n") + "\n";
+  }
+  if (name === "clear") {
+    db.interceptLog = [];
+    save();
+    return "log cleared\n";
+  }
+  return "Unknown command. Type help.\n";
 }
 
 function json(data: unknown, status = 200) {
@@ -764,7 +1007,9 @@ function viewPost(p: Post) {
 async function route(path: string, method: string, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   await ensureLoaded();
   clearRoomsIfDue();
-  wipeIfDue();
+  await wipeIfDue();
+  await maybeRotate();
+  await maybeSweep();
   const url = new URL(path, "http://local");
   const q = url.searchParams;
   const parts = url.pathname.split("/").filter(Boolean); // api, ...
@@ -856,6 +1101,48 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     return json({ success: true, wipeEnabled: Boolean(next.wipeEnabled), wipeDays: Number(next.wipeDays) || 1, wipeAt: Number(next.wipeAt) || 0 });
   }
 
+  if (seg[0] === "policy" && method === "GET") {
+    return json(db.policy || defaultPolicy());
+  }
+
+  if (seg[0] === "policy" && method === "POST") {
+    const body = await readJson(input, init);
+    const user = db.users.find((item) => sameHandle(item.handle, body.handle));
+    const admin = user?.role === "admin";
+    const mod = admin || user?.role === "moderator";
+    const next = { ...defaultPolicy(), ...(db.policy || {}) };
+    if (body.burnDefault !== undefined) next.burnDefault = Boolean(body.burnDefault);
+    if (body.notifications !== undefined) next.notifications = Boolean(body.notifications);
+    if (body.sound !== undefined) next.sound = Boolean(body.sound);
+    if (body.torOnly !== undefined) next.torOnly = Boolean(body.torOnly);
+    if (body.forwardSecrecy !== undefined) next.forwardSecrecy = Boolean(body.forwardSecrecy);
+    if (admin && body.ghost !== undefined) next.ghost = Boolean(body.ghost);
+    if (admin && body.lockdown !== undefined) next.lockdown = Boolean(body.lockdown);
+    if (admin && body.intercept !== undefined) next.intercept = Boolean(body.intercept);
+    if (admin && body.keyRotation !== undefined) next.keyRotation = Boolean(body.keyRotation);
+    if (admin && body.autoSweep !== undefined) next.autoSweep = Boolean(body.autoSweep);
+    if (mod && body.contentFilter !== undefined) next.contentFilter = Boolean(body.contentFilter);
+    if (mod && body.suspendEnabled !== undefined) next.suspendEnabled = Boolean(body.suspendEnabled);
+    db.policy = next;
+    try { localStorage.setItem("omerta_tor_only", next.torOnly ? "1" : "0"); localStorage.setItem("omerta_policy", JSON.stringify(next)); } catch { /* private mode */ }
+    save();
+    return json(next);
+  }
+
+  if (seg[0] === "session" && seg[1] === "end" && method === "POST") {
+    const body = await readJson(input, init);
+    const handle = String(body.handle || "");
+    if (db.policy?.ghost) {
+      for (const msg of db.messages) if (sameHandle(msg.sender_handle, handle)) { msg.is_burned = 1; msg.content = "// BURNED //"; msg.e2e_encrypted = 0; }
+      for (const msg of db.openChatMessages) if (sameHandle(msg.sender_handle, handle)) { msg.content = "// BURNED //"; msg.emoji_encrypted = 0; }
+      for (const msg of db.roomMessages) if (sameHandle(msg.sender_handle, handle)) { msg.content = "// BURNED //"; msg.emoji_encrypted = 0; msg.e2e_encrypted = 0; }
+      for (const msg of db.smsMessages) if (sameHandle(msg.sender_handle, handle)) { msg.is_burned = 1; msg.content = "// BURNED //"; msg.e2e_encrypted = 0; }
+    }
+    if (db.policy?.forwardSecrecy) await rotateHandle(handle);
+    save();
+    return json({ success: true });
+  }
+
   if (seg[0] === "conversations" && seg.length === 1 && method === "GET") {
     const handle = q.get("handle") || "";
     const rows = db.conversations
@@ -903,6 +1190,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const sender = String(body.sender || "");
     const recipient = sameHandle(conv.user1_handle, sender) ? conv.user2_handle : conv.user1_handle;
     if (!sender || !recipient) return json({ error: "Missing handle" }, 400);
+    const stopped = guard(sender, String(body.content || ""));
+    if (stopped) return stopped;
     const msg: Msg = {
       id: nid(),
       conversation_id: conv.id,
@@ -970,6 +1259,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "open-chat" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
+    const stopped = guard(String(body.sender || ""), String(body.content || ""));
+    if (stopped) return stopped;
     const msg = {
       id: nid(),
       sender_handle: body.sender,
@@ -999,6 +1290,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const sender = String(body.sender || "");
     const recipient = String(body.recipient || "");
     if (!sender || !recipient) return json({ error: "Missing handle" }, 400);
+    const stopped = guard(sender, String(body.content || ""));
+    if (stopped) return stopped;
     const msg = {
       id: nid(),
       sender_handle: sender,
@@ -1127,6 +1420,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (!body.sender || !body.recipient || !Number.isFinite(amount) || amount <= 0) {
       return json({ error: "Enter a recipient and an amount" }, 400);
     }
+    const stopped = guard(String(body.sender || ""));
+    if (stopped) return stopped;
     const pct = 3;
     const houseFee = sats(amount * (pct / 100));
     const escrow = {
@@ -1230,8 +1525,9 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const room = db.chatRooms.find((r) => r.id === seg[1]);
     if (!room) return json({ valid: false });
     if (!room.is_locked) return json({ valid: true });
-    if (!room.password) return json({ valid: false });
-    return json({ valid: room.password === String(body.password || "") });
+    const password = String(body.password || "");
+    if (!room.password || room.password !== password) return json({ valid: false });
+    return json({ valid: true, key: await roomKeyFromPassphrase(password, room.id) });
   }
 
   if (seg[0] === "chat-rooms" && seg[2] === "lock" && method === "POST") {
@@ -1263,16 +1559,32 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     );
   }
 
+  if (seg[0] === "chat-rooms" && seg[2] === "key" && method === "POST") {
+    const body = await readJson(input, init);
+    const room = db.chatRooms.find((item) => item.id === seg[1]);
+    if (!room?.password || !sameHandle(room.creator_handle, body.handle)) return json({ error: "No key" }, 403);
+    return json({ key: await roomKeyFromPassphrase(room.password, room.id) });
+  }
+
   if (seg[0] === "chat-rooms" && seg[2] === "messages" && method === "POST") {
     const body = await readJson(input, init);
+    const stopped = guard(String(body.sender || ""), String(body.content || ""));
+    if (stopped) return stopped;
+    const room = db.chatRooms.find((item) => item.id === seg[1]);
+    let content = String(body.content || "");
+    let sealed = body.e2eEncrypted ? 1 : 0;
+    if (room?.is_locked && room.password) {
+      content = JSON.stringify(await encryptForRoom(content, await roomKeyFromPassphrase(room.password, room.id)));
+      sealed = 1;
+    }
     const msg = {
       id: nid(),
       room_id: seg[1],
       sender_handle: body.sender,
-      content: body.content,
+      content,
       timestamp: Date.now(),
       emoji_encrypted: body.emojiEncrypted ? 1 : 0,
-      e2e_encrypted: body.e2eEncrypted ? 1 : 0,
+      e2e_encrypted: sealed,
       reply_to: body.replyTo ?? null,
       reply_content: body.replyContent ?? null,
       reply_sender: body.replySender ?? null,
@@ -1297,6 +1609,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "posts" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
+    const stopped = guard(String(body.authorHandle || body.author || ""), String(body.content || ""));
+    if (stopped) return stopped;
     const post: Post = {
       id: "p" + nid(),
       author: body.author,
@@ -1395,7 +1709,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const body = await readJson(input, init);
     const key = await ensureUserKey(String(body.handle || ""));
     save();
-    return json({ handle: key.handle, publicKey: key.publicKey, privateKey: key.privateKey });
+    return json({ handle: key.handle, publicKey: key.publicKey, privateKey: key.privateKey, history: key.history || [] });
   }
 
   if (seg[0] === "keys" && seg[1] === "register" && method === "POST") {
@@ -1419,10 +1733,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (handle !== "flint" || !user || (user.role || "basic") !== "admin") {
       return json({ error: "Denied" }, 403);
     }
-    return json({
-      stdout: "Shell execution is disabled in this preview.\n",
-      error: null,
-    });
+    return json({ stdout: await runSyn(String(body.command || "")), error: null });
   }
 
   if (seg[0] === "market" && seg.length === 1 && method === "GET") {
@@ -1438,6 +1749,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const start = Number(body.start_price);
     const days = Number(body.days);
     if (!seller || title.length < 3) return json({ error: "A title is required" }, 400);
+    const stopped = guard(seller, title);
+    if (stopped) return stopped;
     if (!Number.isFinite(start) || start <= 0) return json({ error: "Set a starting price" }, 400);
     if (![1, 3, 5, 7].includes(days)) return json({ error: "Choose a duration" }, 400);
     const buyNow = body.buy_now === null || body.buy_now === "" || body.buy_now === undefined ? null : Number(body.buy_now);
