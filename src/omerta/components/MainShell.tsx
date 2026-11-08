@@ -71,12 +71,12 @@ export default function MainShell() {
   };
 
   return (
-    <div className="flex h-full w-full relative" style={{ background: 'hsl(var(--background))' }}>
+    <div className="safe-shell flex h-full w-full min-h-0 relative" style={{ background: 'hsl(var(--background))' }}>
       {/* Left Tab Bar */}
-      <div className="w-14 md:w-16 flex-shrink-0 flex flex-col items-center py-3 md:py-4 border-r z-10 overflow-y-auto scrollbar-hide" style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))' }}>
+      <div className="w-12 md:w-16 flex-shrink-0 flex flex-col items-center py-2 md:py-4 border-r z-10 overflow-y-auto scrollbar-hide" style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))' }}>
         {/* Logo */}
-        <div className="mb-4 md:mb-5 relative">
-          <div className="w-11 h-11 md:w-12 md:h-12 rounded-full overflow-hidden" style={{ background: 'transparent' }}>
+        <div className="mb-2 md:mb-5 relative">
+          <div className="w-8 h-8 md:w-12 md:h-12 rounded-full overflow-hidden" style={{ background: 'transparent' }}>
             <img
               src="/logo.jpg"
               alt="Omerta"
@@ -106,7 +106,7 @@ export default function MainShell() {
               <button
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
-                className="relative w-10 h-10 md:w-11 md:h-11 flex flex-col items-center justify-center rounded-md transition-all group"
+                className="relative w-9 h-9 md:w-11 md:h-11 flex flex-col items-center justify-center rounded-md transition-all group"
                 style={{
                   background: isActive ? 'hsl(var(--sidebar-accent))' : 'transparent',
                   color: isActive ? 'hsl(var(--sidebar-accent-foreground))' : 'hsl(var(--sidebar-foreground) / 0.6)',

@@ -65,7 +65,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="safe-shell fixed inset-0 z-50 flex items-center justify-center">
       {/* Secret Admin Login — appears after correct coin flip sequence */}
       <SecretAdminLogin isOpen={showSecretLogin} onClose={() => setShowSecretLogin(false)} />
 

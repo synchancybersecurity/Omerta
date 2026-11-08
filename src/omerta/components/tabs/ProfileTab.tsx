@@ -694,30 +694,30 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
 
       {/* NEWS FEED HEADER (feed mode only, no viewingProfile) */}
       {!isOwn && !viewingProfile && (
-        <div className="px-4 md:px-6 pt-4 md:pt-6 pb-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Globe size={18} style={{ color: 'hsl(var(--primary))' }} />
-            <h1 className="font-serif text-xl md:text-2xl tracking-wider" style={{ color: 'hsl(var(--foreground))' }}>NEWS</h1>
+        <div className="px-3 md:px-6 pt-3 md:pt-6 pb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Globe size={16} style={{ color: 'hsl(var(--primary))' }} />
+            <h1 className="font-serif text-lg md:text-2xl tracking-wider" style={{ color: 'hsl(var(--foreground))' }}>NEWS</h1>
           </div>
-          <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>// RECENT TRANSMISSIONS FROM THE NETWORK //</p>
+          <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>// RECENT TRANSMISSIONS //</p>
         </div>
       )}
 
       {/* PROFILE HEADER — YOUR data normally, THEIR data when viewingProfile */}
       {(isOwn || viewingProfile) && (
-      <div className="px-4 md:px-6 pt-4 md:pt-6 pb-4">
-        <div className="flex items-start gap-4 md:gap-5">
+      <div className="px-3 md:px-6 pt-3 md:pt-6 pb-3">
+        <div className="flex items-center gap-3">
           {isOwn ? (
             <button
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="w-16 h-16 md:w-24 md:h-24 rounded-full flex-shrink-0 border-2 overflow-hidden relative group"
+              className="w-12 h-12 md:w-24 md:h-24 rounded-full flex-shrink-0 border-2 overflow-hidden relative group"
               style={{ borderColor: 'hsl(var(--primary) / 0.5)' }}
             >
               {selectedAvatar ? (
                 <img src={selectedAvatar} alt="avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center" style={{ background: 'hsl(var(--primary))' }}>
-                  <span className="font-serif text-2xl md:text-4xl font-bold text-white">{displayName.charAt(0)}</span>
+                  <span className="font-serif text-lg md:text-4xl font-bold text-white">{displayName.charAt(0)}</span>
                 </div>
               )}
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -725,33 +725,31 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
               </div>
             </button>
           ) : (
-            <div className="w-16 h-16 md:w-24 md:h-24 rounded-full flex-shrink-0 border-2 overflow-hidden" style={{ borderColor: 'hsl(var(--primary) / 0.5)' }}>
+            <div className="w-12 h-12 md:w-24 md:h-24 rounded-full flex-shrink-0 border-2 overflow-hidden" style={{ borderColor: 'hsl(var(--primary) / 0.5)' }}>
               {userProfiles[viewingProfile!]?.avatar ? (
                 <img src={userProfiles[viewingProfile!].avatar!} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center" style={{ background: 'hsl(var(--primary))' }}>
-                  <span className="font-serif text-2xl md:text-4xl font-bold text-white">{viewingProfile!.charAt(0)}</span>
+                  <span className="font-serif text-lg md:text-4xl font-bold text-white">{viewingProfile!.charAt(0)}</span>
                 </div>
               )}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="font-serif text-xl md:text-3xl tracking-wider mb-1" style={{ color: 'hsl(var(--foreground))' }}>{displayName}</h1>
-            <p className="font-mono text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>@{displayName.toLowerCase()}</p>
+            <h1 className="font-serif text-lg md:text-3xl tracking-wider truncate" style={{ color: 'hsl(var(--foreground))' }}>{displayName}</h1>
+            <p className="font-mono text-[11px] truncate" style={{ color: 'hsl(var(--muted-foreground))' }}>@{displayName.toLowerCase()}</p>
             {viewingProfile && (
               <button
                 onClick={() => setViewingProfile(null)}
                 className="mt-2 px-3 py-1 font-mono text-[10px] uppercase tracking-wider border rounded-sm transition-all hover:brightness-110"
                 style={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}
               >
-                BACK TO MY PROFILE
+                BACK
               </button>
             )}
           </div>
           {isOwn && (
-            <div className="flex flex-col md:flex-row gap-2 flex-shrink-0">
-              <button onClick={() => setShowEditProfile(true)} className="px-3 py-2 md:px-4 md:py-2.5 border font-mono text-xs uppercase tracking-wider hover:opacity-80 transition-all rounded-sm whitespace-nowrap" style={{ borderColor: 'hsl(var(--primary))', color: 'hsl(var(--primary))' }}>Edit Profile</button>
-            </div>
+            <button onClick={() => setShowEditProfile(true)} className="px-2 py-1.5 md:px-4 md:py-2.5 border font-mono text-[10px] md:text-xs uppercase tracking-wider hover:opacity-80 transition-all rounded-sm whitespace-nowrap flex-shrink-0" style={{ borderColor: 'hsl(var(--primary))', color: 'hsl(var(--primary))' }}>Edit</button>
           )}
         </div>
       </div>
