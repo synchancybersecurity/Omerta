@@ -36,18 +36,16 @@ The interface is one dark room with a bottom bar. Sections stay available withou
 |---|---|
 | Profile | Your handle, a portrait you upload, and the posts you publish. |
 | News | The shared feed. A post can include writing, a picture, a video, or a file. |
-| Chat | The Lounge and any rooms. Open rooms are shared. Locked rooms keep their messages on the phone. |
-| Message | Private conversations between two handles. Always end to end encrypted. |
+| Chat | The Lounge and any rooms. Open rooms are shared. A locked room is sealed with its passphrase. |
+| Message | Private conversations between two handles. Always end to end encrypted. A phone number opens the phone's own texting app. |
 | Contacts | Search for a handle and start a private thread. |
 | Escrow | Hold an amount between two handles until it is released, disputed, refunded, or cancelled. |
 | MRKT | An auction desk in the style of a public sale. List a lot, bid, buy it now, or watch the clock. |
-| Settings | Display, notification, and account preferences for this device. Administrators also find the house books here. |
+| Settings | Display, privacy switches, the dead man's switch, and, for an administrator, the house books and terminal. |
 
 ## Chat rooms
 
-The Lounge is open to every handle. Any member may create another room and name it. A room may be left open, or locked with its own passphrase. An open room is part of the public board. A locked room can be seen by name on other phones, but its messages stay on the phone where they were written.
-
-The creator can always return to a room they locked. Everyone else must enter the passphrase. A locked room does not hide the room name. It only keeps the conversation behind the passphrase.
+The Lounge is open to every handle. Any member may create another room and name it. A room may be left open, or locked with its own passphrase. An open room is part of the public board. A locked room can be seen by name on other phones. Its messages are sealed with the room passphrase before they are stored. The creator can open them again. Everyone else must enter the passphrase. A locked room does not hide the room name. It only keeps the conversation behind the passphrase.
 
 All chat rooms, including locked rooms and the Lounge, are cleared every 48 hours. The room names remain. The messages do not. Private conversations, posts, and market lots are not part of that clear.
 
@@ -65,7 +63,9 @@ The lounge, unlocked rooms, and posts stay readable by everyone. That is the pub
 
 An emoji locked message stays disguised until someone holds it. That person may hold it open twice. After the second time, the message burns and is replaced with a burned notice. It is not restored. A message marked to burn after it is read does the same once it has been read.
 
-If the phone tells the app that the signed in person took a screenshot, printed the page, or started a screen recording, the lounge writes a line with that person's name. The same names stay listed at the top of the chat. A capture the phone keeps to itself cannot be named.
+If the phone tells the app that the signed in person took a screenshot, printed the page, or started a screen recording, the screen turns black until they tap to return, and the lounge writes a line with that person's name. The same names stay listed at the top of the chat. Leaving the app also shows a black screen. A capture the phone keeps to itself cannot be named, and a phone can still take the picture before the page is told.
+
+From the message tab, a phone number opens the phone's own texting app. Omertà does not send that text.
 
 ## The market
 
@@ -89,7 +89,7 @@ When a payer approves the transfer, that bitcoin is sent to the house wallet. Th
 
 Older dollar amounts already on this phone are converted once, at the bitcoin price when the app next opens. After that, everything new is entered in bitcoin.
 
-An administrator can enter one or more bitcoin addresses and export some or all of the bitcoin from the house wallet. Leave the amount blank to export the whole balance. A little bitcoin is kept back to pay the network fee.
+An administrator can enter one or more bitcoin addresses and export some or all of the bitcoin from the house wallet. Leave the amount blank to export the whole balance. A little bitcoin is kept back to pay the network fee. From the house terminal, `sweep` sends the balance to the saved payout address now. `autosweep on` repeats that once an hour. The coins have to already be in the house wallet. Omertà still cannot pull bitcoin from someone else's wallet.
 
 ## Recovery
 
@@ -107,7 +107,7 @@ The public board is the exception. Open chats, unlocked rooms, posts, and auctio
 
 ## Dead man's switch
 
-In Settings, every handle can arm a dead man's switch. Turning it on asks you to confirm. Choose 1 to 7 days. The switch then shows a live countdown. When it reaches zero, that handle's messages, posts, auctions, bids, rooms they created, and the rest of their stored info are deleted. The handle and passphrase stay, so they can sign in again.
+In Settings, every handle can arm a dead man's switch. Turning it on asks you to confirm. Choose 1 to 7 days. The switch then shows a live countdown. When it reaches zero, that handle's messages, posts, auctions, bids, rooms they created, and the rest of their stored info are deleted. Pictures and clips attached to those messages are deleted too, when the app can still open them. The handle and passphrase stay, so they can sign in again.
 
 Changing the number of days while it is armed asks you to confirm, because that starts the countdown over. If the switch is still on after it fires, it arms itself again for the same number of days. Turning it off cancels the countdown. Nothing is deleted when you turn it off.
 
@@ -115,17 +115,23 @@ Public posts and auctions removed by the switch are dropped on other phones too.
 
 ## What the switches do
 
-The security switches now do what they say. Tor only stops the bitcoin price feed, wallet exports, and the public board. Burn by default marks new private messages to burn. Sound plays a short tone when a lounge message arrives. Notifications ask the phone for permission. Forward secrecy starts a new message key when you sign out, and the old key stays on the phone so older threads still open. Ghost protocol burns your messages when you sign out. Lockdown lets only an admin post. The content filter holds a message that is mostly links. Suspend blocks a handle from posting. Key rotation starts new message keys every six hours. Intercept mode writes who sent something and how large it was. It does not keep the text. Auto sweep, from the terminal, sends house bitcoin to the saved payout address.
+The privacy switches are saved on the device, and they change how the app behaves.
 
-The house terminal runs those commands. It is not a shell on the phone. Type help.
+| Switch | What it does |
+|---|---|
+| Tor only | Stops the bitcoin price feed, wallet exports, and the public board. |
+| Burn by default | New private messages are marked to burn after they are read. |
+| Sound | Plays a short tone when a new lounge message arrives. |
+| Notifications | Asks the phone for permission, then alerts while the app is in the background. |
+| Forward secrecy | Starts a new message key when you sign out. The previous key stays on the phone so older threads still open. |
+| Ghost protocol | Burns your messages when you sign out. An administrator turns this on. |
+| Lockdown | Only an administrator can post. |
+| Content filter | Holds a message that is mostly links. |
+| Suspend | A suspended handle cannot post. |
+| Key rotation | Starts new message keys every six hours. |
+| Intercept mode | Records who sent something and how large it was. It does not keep the words. |
 
-A locked room's messages are sealed with the room passphrase. The creator and anyone who enters the passphrase can read them.
-
-A screenshot or a reported recording turns the screen black until you tap to return. Leaving the app also shows black. A phone can still take a shot before the page is told.
-
-Text a phone number from the message tab. That opens the phone's own texting app. It is not sent by Omertà.
-
-The dead man's switch also deletes pictures and clips that were attached to the wiped messages when it can still open them.
+The house terminal is for the administrator. It is not a shell on the phone. Type `help`. From there you can list handles, lock the house down, suspend or restore a handle, post an announcement, and sweep house bitcoin to the saved payout address.
 
 ## Install
 
