@@ -70,20 +70,39 @@ export function useCoinDrag({ holdMs = 5000, onActivate, onComboComplete }: UseC
     [resetCombo],
   );
 
-  const spin = useCallback((delta: number) => {
+  const spinTo = useCallback((target: number) => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     const from = rotationRef.current;
     const started = performance.now();
     const frame = (now: number) => {
-      const t = Math.min(1, (now - started) / 460);
+      const t = Math.min(1, (now - started) / 520);
       const eased = 1 - Math.pow(1 - t, 3);
-      const pos = from + delta * eased;
+      const pos = from + (target - from) * eased;
       rotationRef.current = pos;
       setRotation(pos);
-      if (t < 1) rafRef.current = requestAnimationFrame(frame);
-      else rafRef.current = null;
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(frame);
+        return;
+      }
+      rotationRef.current = 0;
+      setRotation(0);
+      rafRef.current = null;
     };
     rafRef.current = requestAnimationFrame(frame);
+  }, []);
+
+  const faceTarget = useCallback((direction: "up" | "down") => {
+    const current = rotationRef.current;
+    if (direction === "up") {
+      let target = Math.floor(current / 360) * 360;
+      if (target >= current - 1) target -= 360;
+      if (current - target < 300) target -= 360;
+      return target;
+    }
+    let target = Math.ceil(current / 360) * 360;
+    if (target <= current + 1) target += 360;
+    if (target - current < 300) target += 360;
+    return target;
   }, []);
 
   const clearHold = useCallback(() => {
@@ -102,6 +121,8 @@ export function useCoinDrag({ holdMs = 5000, onActivate, onComboComplete }: UseC
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
+      rotationRef.current = 0;
+      setRotation(0);
       clearHold();
       if (!activatedRef.current) {
         holdTimerRef.current = setTimeout(() => {
@@ -136,12 +157,15 @@ export function useCoinDrag({ holdMs = 5000, onActivate, onComboComplete }: UseC
     const net = startY.current - lastY.current;
     if (activatedRef.current && Math.abs(net) >= FLICK_THRESHOLD) {
       const direction = net > 0 ? "up" : "down";
-      spin(direction === "up" ? -360 : 360);
+      spinTo(faceTarget(direction));
       recordGesture(direction);
       return;
     }
-    if (activatedRef.current) spin(-(rotationRef.current % 360));
-  }, [clearHold, recordGesture, spin]);
+    if (activatedRef.current) {
+      const nearest = Math.round(rotationRef.current / 360) * 360;
+      spinTo(nearest);
+    }
+  }, [clearHold, faceTarget, recordGesture, spinTo]);
 
   const beginRef = useRef(begin);
   const dragRef = useRef(drag);
