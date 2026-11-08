@@ -508,14 +508,14 @@ function DataWipe() {
     });
     const data = await res.json();
     setWipeAt(Number(data.wipeAt) || 0);
-    setNotice(nextEnabled ? "Wipe is on." : "Wipe is off.");
+    setNotice(nextEnabled ? "Dead man's switch is on." : "Dead man's switch is off.");
   };
 
   return (
     <div className="mb-4 border rounded-lg p-3" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--card))" }}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="font-mono text-sm" style={{ color: "hsl(var(--foreground))" }}>Wipe my data</h3>
+          <h3 className="font-mono text-sm" style={{ color: "hsl(var(--foreground))" }}>Dead man's switch</h3>
           <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>Turn this on and choose 1 to 7 days. When the time is up, your messages, posts, auctions, and the rest of your stored info are deleted. Your handle stays.</p>
         </div>
         <button type="button" onClick={() => void save(!enabled, days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
@@ -527,7 +527,7 @@ function DataWipe() {
           <button key={value} type="button" onClick={() => void save(enabled, value)} className="flex-1 py-2 rounded-sm font-mono text-[10px] border" style={{ borderColor: days === value ? "hsl(var(--primary))" : "hsl(var(--border))", color: days === value ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>{value}d</button>
         ))}
       </div>
-      {enabled && wipeAt > 0 && <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--primary))" }}>Next wipe {new Date(wipeAt).toLocaleString()}.</p>}
+      {enabled && wipeAt > 0 && <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--primary))" }}>Fires {new Date(wipeAt).toLocaleString()}.</p>}
       {notice && <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>{notice}</p>}
     </div>
   );
