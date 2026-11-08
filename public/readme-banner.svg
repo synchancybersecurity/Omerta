@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Omertà">
+  <rect width="1200" height="420" fill="#0A0A0A"/>
+  <rect x="48" y="36" width="1104" height="348" fill="none" stroke="#B91C1C" stroke-width="1.5"/>
+  <rect x="64" y="52" width="1072" height="316" fill="none" stroke="#2A2A2A" stroke-width="1"/>
+  <text x="600" y="168" text-anchor="middle" fill="#B91C1C" font-family="Georgia, 'Times New Roman', serif" font-size="22" letter-spacing="10">BLACK OPS COMMUNICATIONS</text>
+  <text x="600" y="248" text-anchor="middle" fill="#F0EBE6" font-family="Georgia, 'Times New Roman', serif" font-size="92" letter-spacing="14">OMERTÀ</text>
+  <text x="600" y="308" text-anchor="middle" fill="#A1A1A1" font-family="Georgia, 'Times New Roman', serif" font-size="22" letter-spacing="6">CODE OF SILENCE</text>
+  <rect x="470" y="338" width="260" height="2" fill="#B91C1C"/>
+</svg>
