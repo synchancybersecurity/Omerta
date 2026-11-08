@@ -64,13 +64,3 @@ npm run build:pages
 ## The old server
 
 The original Express program is kept in the `original` folder, including the database layer, Docker, and the Termux notes. GitHub Pages cannot keep that process running. It only serves the browser app. If you start the old server yourself, do it on a machine you control, and do not leave a shell open to the internet.
-
-## The colors
-
-The room is pit black, the mark is blood, and the type is bone. That is the whole palette. It should feel like a back room, not a toy and not a spaceship.
-
-<p align="center">
-  <img src="https://img.shields.io/badge/0A0A0A-0A0A0A?style=flat-square" alt="0A0A0A">
-  <img src="https://img.shields.io/badge/B91C1C-B91C1C?style=flat-square" alt="B91C1C">
-  <img src="https://img.shields.io/badge/F0EBE6-F0EBE6?style=flat-square" alt="F0EBE6">
-</p>
