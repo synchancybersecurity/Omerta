@@ -6,7 +6,7 @@ import { ScrambleText } from '@omerta/hooks/useScrambleText';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import { emojiEncrypt, emojiDecrypt } from '@omerta/utils/emojiCipher';
 import { initE2E, getStoredKeyPair, importPrivateKey, importPublicKey, encryptMessage, decryptMessage } from '@omerta/utils/crypto';
-import { AttachmentView, MAX_ATTACHMENT_BYTES, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
+import { AttachmentView, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
 function formatTime(ts: number) {
@@ -516,10 +516,6 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      showToast('// FILE TOO LARGE //');
-      return;
-    }
     setUploading(true);
     const result = await uploadFile(file);
     setUploading(false);

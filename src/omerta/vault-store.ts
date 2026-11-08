@@ -46,16 +46,12 @@ export async function vaultDelete(key: string) {
   });
 }
 
-export const VAULT_LIMIT_BYTES = 100 * 1024 * 1024 * 1024;
-export const MAX_FILE_BYTES = 512 * 1024 * 1024;
 const USAGE_KEY = "file-usage";
 
 type FileRec = { bytes: number; mime: string; iv: ArrayBuffer; data: ArrayBuffer };
 
 export async function storeVaultFile(plain: ArrayBuffer, mime: string) {
-  if (plain.byteLength > MAX_FILE_BYTES) throw new Error("That file is over 512 MB");
   const used = Number(await vaultGet(USAGE_KEY)) || 0;
-  if (used + plain.byteLength > VAULT_LIMIT_BYTES) throw new Error("The vault is full");
   const sealed = await sealBytes(plain);
   const id = "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const db = await openDb();

@@ -4,8 +4,6 @@ import { openVaultFile } from "@omerta/vault-store";
 
 const TOKEN = /\[img:(data:[^[\]]+|vault:[A-Za-z0-9]+)\]|\[video:(data:[^[\]]+|vault:[A-Za-z0-9]+)\]|\[file:([^:\]]+):(data:[^[\]]+|vault:[A-Za-z0-9]+)\]/g;
 
-export const MAX_ATTACHMENT_BYTES = 512 * 1024 * 1024;
-
 function useVaultSrc(src: string) {
   const [url, setUrl] = useState(src.startsWith("vault:") ? "" : src);
   useEffect(() => {

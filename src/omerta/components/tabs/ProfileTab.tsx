@@ -6,7 +6,7 @@ import {
   Users, Shield, Pencil, Trash2, X, ChevronDown, ChevronUp, UserCircle, Hash,
 } from 'lucide-react';
 import { emojiEncrypt } from '@omerta/utils/emojiCipher';
-import { AttachmentView, MAX_ATTACHMENT_BYTES, packAttachment } from '@omerta/components/Attachment';
+import { AttachmentView, packAttachment } from '@omerta/components/Attachment';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import EditProfileModal from '@omerta/components/EditProfileModal';
 import UserProfileModal from '@omerta/components/UserProfileModal';
@@ -772,7 +772,7 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = "";
-                      if (!file || !file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) return;
+                      if (!file || !file.type.startsWith("image/")) return;
                       const reader = new FileReader();
                       reader.onload = () => {
                         setSelectedAvatar(String(reader.result));
@@ -913,7 +913,6 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
                   const file = e.target.files?.[0];
                   e.target.value = "";
                   if (!file) return;
-                  if (file.size > MAX_ATTACHMENT_BYTES) { showToast("// FILE TOO LARGE //"); return; }
                   setPostUploading(true);
                   const data = await uploadFile(file);
                   if (data && data.url) setPostAttach(packAttachment(file, data.url));
@@ -931,7 +930,6 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
                   e.target.value = "";
                   if (!file) return;
                   if (file.type && !file.type.startsWith("video/") && !/\.(mp4|mov|m4v|webm)$/i.test(file.name)) { showToast("// NOT A VIDEO //"); return; }
-                  if (file.size > MAX_ATTACHMENT_BYTES) { showToast("// FILE TOO LARGE //"); return; }
                   setPostUploading(true);
                   const data = await uploadFile(file);
                   if (data && data.url) setPostAttach(packAttachment(file, data.url));

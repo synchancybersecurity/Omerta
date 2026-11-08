@@ -3,7 +3,7 @@ import { useApp } from '@omerta/store/AppContext';
 import { useApi } from '@omerta/store/ApiContext';
 import { emojiEncrypt, emojiDecrypt } from '@omerta/utils/emojiCipher';
 import { Hash, Lock, Send, X, Reply, ChevronLeft, Plus, Trash2, Globe, Users, Paperclip } from 'lucide-react';
-import { AttachmentView, MAX_ATTACHMENT_BYTES, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
+import { AttachmentView, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
@@ -180,7 +180,6 @@ export default function ChatTab() {
 
   const handleAttach = async (file: File | undefined) => {
     if (!file || !activeRoomId) return;
-    if (file.size > MAX_ATTACHMENT_BYTES) { showToast("// FILE TOO LARGE //"); return; }
     setUploading(true);
     const result = await uploadFile(file);
     setUploading(false);

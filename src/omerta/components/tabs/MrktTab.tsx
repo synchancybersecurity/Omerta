@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { payHouseCut } from "@omerta/chain";
-import { MAX_ATTACHMENT_BYTES, VaultImg } from "@omerta/components/Attachment";
+import { VaultImg } from "@omerta/components/Attachment";
 import { useApp } from "@omerta/store/AppContext";
 import { ArrowLeft, Clock, Gavel, Heart, Plus, Search, Store, Tag } from "lucide-react";
 
@@ -242,8 +242,8 @@ export default function MrktTab() {
 
   const onPhoto = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES) {
-      setNotice("That image is too large");
+    if (!file.type.startsWith("image/")) {
+      setNotice("Choose a picture");
       return;
     }
     const body = new FormData();
