@@ -10,6 +10,7 @@ interface EncryptedPayload {
   iv: string;       // base64
   ciphertext: string; // base64
   senderPublicKey: string; // base64 JWK
+  recipientPublicKey: string;
 }
 
 // --- KEY MANAGEMENT ---
@@ -56,40 +57,31 @@ async function deriveSharedKey(privateKey: CryptoKey, publicKey: CryptoKey): Pro
 
 // --- ENCRYPT / DECRYPT ---
 
-export async function encryptMessage(plaintext: string, myPrivateKey: CryptoKey, recipientPublicKey: CryptoKey): Promise<EncryptedPayload> {
+export async function encryptMessage(plaintext: string, myPrivateKey: CryptoKey, senderPublicKey: string, recipientPublicKey: CryptoKey): Promise<EncryptedPayload> {
   const sharedKey = await deriveSharedKey(myPrivateKey, recipientPublicKey);
   const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plaintext);
-
   const encrypted = await crypto.subtle.encrypt(
     { name: ALGO, iv },
     sharedKey,
-    data
+    new TextEncoder().encode(plaintext)
   );
-
-  // Export our public key so recipient can derive the same shared key
-  const senderPub = await exportPublicKey(await derivePublicKey(myPrivateKey));
 
   return {
     iv: arrayBufferToBase64(iv),
     ciphertext: arrayBufferToBase64(encrypted),
-    senderPublicKey: senderPub,
+    senderPublicKey,
+    recipientPublicKey: await exportPublicKey(recipientPublicKey),
   };
 }
 
-export async function decryptMessage(payload: EncryptedPayload, myPrivateKey: CryptoKey): Promise<string> {
-  const senderPub = await importPublicKey(payload.senderPublicKey);
-  const sharedKey = await deriveSharedKey(myPrivateKey, senderPub);
-  const iv = base64ToArrayBuffer(payload.iv);
-  const ciphertext = base64ToArrayBuffer(payload.ciphertext);
-
+export async function decryptMessage(payload: EncryptedPayload, myPrivateKey: CryptoKey, myPublicKey: string): Promise<string> {
+  const other = payload.senderPublicKey === myPublicKey ? payload.recipientPublicKey : payload.senderPublicKey;
+  const sharedKey = await deriveSharedKey(myPrivateKey, await importPublicKey(other));
   const decrypted = await crypto.subtle.decrypt(
-    { name: ALGO, iv },
+    { name: ALGO, iv: base64ToArrayBuffer(payload.iv) },
     sharedKey,
-    ciphertext
+    base64ToArrayBuffer(payload.ciphertext)
   );
-
   return new TextDecoder().decode(decrypted);
 }
 
@@ -118,6 +110,15 @@ export async function initE2E(): Promise<{ publicKey: string; privateKey: string
   return { publicKey: pub, privateKey: priv };
 }
 
+export async function openPrivate(payload: EncryptedPayload, myPrivateKey: CryptoKey, myPublicKey: string): Promise<{ body: string; reply: string }> {
+  const text = await decryptMessage(payload, myPrivateKey, myPublicKey);
+  try {
+    const packed = JSON.parse(text) as { body?: string; reply?: string };
+    if (packed && typeof packed.body === "string") return { body: packed.body, reply: packed.reply || "" };
+  } catch { /* a sealed message can be plain text */ }
+  return { body: text, reply: "" };
+}
+
 // --- UTILS ---
 
 function arrayBufferToBase64(buf: ArrayBuffer | Uint8Array): string {
@@ -132,13 +133,6 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
-}
-
-// Derive public key from private (for re-exporting)
-async function derivePublicKey(_privateKey: CryptoKey): Promise<CryptoKey> {
-  // ECDH public key can be extracted if keys were generated as extractable
-  // For non-extractable private keys, we stored the public key separately
-  throw new Error('Use stored public key - derivePublicKey not needed');
 }
 
 export async function encryptForRoom(plaintext: string, roomKey: string): Promise<{ iv: string; ciphertext: string }> {

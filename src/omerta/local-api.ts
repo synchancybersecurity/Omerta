@@ -1,6 +1,7 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
 import { exchangeBoard, type PublicBoard } from "@omerta/board";
+import { encryptMessage, exportPrivateKey, exportPublicKey, generateKeyPair, importPrivateKey, importPublicKey } from "@omerta/utils/crypto";
 import { asBitcoinWallet, createHouseWallet, exportHouseBtc, isBtcAddress, restoreHouseWallet, spotUsd } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
@@ -70,6 +71,7 @@ type Db = {
   houseWallet: { address: string; key: string; phrase?: string } | null;
   payoutWallets: string[];
   publicKeys: Record<string, string>;
+  userKeys: Record<string, { publicKey: string; privateKey: string }>;
   listings: Listing[];
   moneyUnit?: "btc";
   captures: Array<{ id: string; handle: string; kind: "screenshot" | "recording"; timestamp: number }>;
@@ -303,6 +305,7 @@ function emptyDb(): Db {
     houseWallet: null,
     payoutWallets: [],
     publicKeys: {},
+    userKeys: {},
     listings: [],
     captures: [],
   };
@@ -390,6 +393,56 @@ function nid() {
   return Date.now() + seq;
 }
 
+async function ensureUserKey(handle: string) {
+  const name = handle.trim();
+  if (!name) throw new Error("Missing handle");
+  if (!db.userKeys) db.userKeys = {};
+  const found = Object.keys(db.userKeys).find((key) => key.toLowerCase() === name.toLowerCase());
+  if (found) {
+    db.publicKeys[found] = db.userKeys[found].publicKey;
+    return { handle: found, ...db.userKeys[found] };
+  }
+  const pair = await generateKeyPair();
+  const publicKey = await exportPublicKey(pair.publicKey);
+  const privateKey = await exportPrivateKey(pair.privateKey);
+  db.userKeys[name] = { publicKey, privateKey };
+  db.publicKeys[name] = publicKey;
+  return { handle: name, publicKey, privateKey };
+}
+
+async function sealBetween(sender: string, recipient: string, plaintext: string, reply = "") {
+  const mine = await ensureUserKey(sender);
+  const theirs = await ensureUserKey(recipient);
+  const payload = await encryptMessage(
+    JSON.stringify({ body: plaintext, reply }),
+    await importPrivateKey(mine.privateKey),
+    mine.publicKey,
+    await importPublicKey(theirs.publicKey),
+  );
+  return JSON.stringify(payload);
+}
+
+async function sealPlainPrivate() {
+  let changed = false;
+  for (const msg of db.messages) {
+    if (msg.e2e_encrypted || msg.is_burned || msg.sender_handle === "notice") continue;
+    const conv = db.conversations.find((item) => item.id === msg.conversation_id);
+    if (!conv) continue;
+    const other = sameHandle(conv.user1_handle, msg.sender_handle) ? conv.user2_handle : conv.user1_handle;
+    msg.content = await sealBetween(msg.sender_handle, other, msg.content, msg.reply_content || "");
+    msg.reply_content = null;
+    msg.e2e_encrypted = 1;
+    changed = true;
+  }
+  for (const msg of db.smsMessages) {
+    if (msg.e2e_encrypted || msg.is_burned || !msg.sender_handle || !msg.recipient) continue;
+    msg.content = await sealBetween(String(msg.sender_handle), String(msg.recipient), String(msg.content || ""));
+    msg.e2e_encrypted = 1;
+    changed = true;
+  }
+  if (changed) save();
+}
+
 let db: Db = emptyDb();
 let loaded = false;
 let loading: Promise<void> | null = null;
@@ -416,7 +469,7 @@ async function loadAsync() {
       db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: "bitcoin" };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
-      if (!Array.isArray(db.captures)) db.captures = [];
+      if (!db.userKeys) db.userKeys = {};
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
@@ -435,6 +488,7 @@ async function loadAsync() {
     db = emptyDb();
     db.moneyUnit = "btc";
   }
+  try { await sealPlainPrivate(); } catch { /* leave an unreadable private message sealed on the next open */ }
   loaded = true;
   startBoard();
 }
@@ -646,6 +700,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const user = db.users.find((u) => u.handle.toLowerCase() === handle.toLowerCase());
     if (!user) return json({ error: "No such handle", code: "unknown" }, 401);
     if (user.passphrase !== passphrase) return json({ error: "Wrong passphrase", code: "bad_passphrase" }, 401);
+    await ensureUserKey(user.handle);
+    save();
     return json({ success: true, handle: user.handle, role: user.role || "basic" });
   }
 
@@ -660,6 +716,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const role = "basic";
     const user: User = { id: nid(), handle, passphrase, role, created_at: Math.floor(Date.now() / 1000) };
     db.users.push(user);
+    await ensureUserKey(user.handle);
     save();
     return json({ success: true, handle: user.handle, role: user.role });
   }
@@ -720,7 +777,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
         const last = msgs[msgs.length - 1];
         return {
           ...c,
-          last_message: last?.content || null,
+          last_message: last?.e2e_encrypted ? "Encrypted message" : (last?.content || null),
           last_timestamp: last?.timestamp || null,
           unread: msgs.filter((m) => m.sender_handle !== handle && !m.is_burned).length,
         };
@@ -753,18 +810,23 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "conversations" && seg[2] === "messages" && method === "POST") {
     const body = await readJson(input, init);
+    const conv = db.conversations.find((item) => item.id === Number(seg[1]));
+    if (!conv) return json({ error: "No such conversation" }, 404);
+    const sender = String(body.sender || "");
+    const recipient = sameHandle(conv.user1_handle, sender) ? conv.user2_handle : conv.user1_handle;
+    if (!sender || !recipient) return json({ error: "Missing handle" }, 400);
     const msg: Msg = {
       id: nid(),
-      conversation_id: Number(seg[1]),
-      sender_handle: body.sender,
-      content: body.content,
+      conversation_id: conv.id,
+      sender_handle: sender,
+      content: await sealBetween(sender, recipient, String(body.content || ""), String(body.replyContent || "")),
       timestamp: Date.now(),
       burn_after_read: body.burnAfterRead ? 1 : 0,
       is_burned: 0,
       emoji_encrypted: body.emojiEncrypted ? 1 : 0,
-      e2e_encrypted: body.e2eEncrypted ? 1 : 0,
+      e2e_encrypted: 1,
       reply_to: body.replyTo ?? null,
-      reply_content: body.replyContent ?? null,
+      reply_content: null,
       reply_sender: body.replySender ?? null,
     };
     db.messages.push(msg);
@@ -846,14 +908,18 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "sms" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
+    const sender = String(body.sender || "");
+    const recipient = String(body.recipient || "");
+    if (!sender || !recipient) return json({ error: "Missing handle" }, 400);
     const msg = {
       id: nid(),
-      sender_handle: body.sender,
-      recipient: body.recipient,
-      content: body.content,
+      sender_handle: sender,
+      recipient,
+      content: await sealBetween(sender, recipient, String(body.content || "")),
       timestamp: Date.now(),
       burn_after_read: body.burnAfterRead ? 1 : 0,
       is_burned: 0,
+      e2e_encrypted: 1,
     };
     db.smsMessages.unshift(msg);
     save();
@@ -1035,7 +1101,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const results: Array<Record<string, unknown>> = [];
     for (const conv of db.conversations.filter((c) => sameHandle(c.user1_handle, handle) || sameHandle(c.user2_handle, handle))) {
       const other = sameHandle(conv.user1_handle, handle) ? conv.user2_handle : conv.user1_handle;
-      for (const msg of db.messages.filter((m) => m.conversation_id === conv.id && m.content.toLowerCase().includes(query))) {
+      for (const msg of db.messages.filter((m) => m.conversation_id === conv.id && !m.e2e_encrypted && m.content.toLowerCase().includes(query))) {
         results.push({ ...msg, other_handle: other });
       }
     }
@@ -1235,6 +1301,13 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     post.replies.push(reply);
     save();
     return json(reply);
+  }
+
+  if (seg[0] === "keys" && seg[1] === "mine" && method === "POST") {
+    const body = await readJson(input, init);
+    const key = await ensureUserKey(String(body.handle || ""));
+    save();
+    return json({ handle: key.handle, publicKey: key.publicKey, privateKey: key.privateKey });
   }
 
   if (seg[0] === "keys" && seg[1] === "register" && method === "POST") {

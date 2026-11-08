@@ -55,7 +55,7 @@ A post or a private message can carry a picture, a video, or another file. There
 
 A post or a private message can be marked to burn after it is read. A burned message is replaced with a burned notice. It is not restored.
 
-A member can also turn on end to end encryption for a private thread. That option encrypts the message for the other handle before it is stored. It is optional. The vault seal still covers everything on disk either way.
+A private message is sealed end to end between the two handles before it is stored. Each handle has its own key on the phone. The stored message is ciphertext. The sender and the other handle can read it. Nobody else is given the text, and it is not published on the public board. A text message is sealed the same way. The lounge, unlocked rooms, and posts stay readable by everyone, on purpose.
 
 An emoji locked message stays disguised until someone holds it. That person may hold it open twice. After the second time, the message burns and is replaced with a burned notice.
 

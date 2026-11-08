@@ -5,7 +5,7 @@ import { Lock, Flame, Send, Paperclip, ChevronLeft, Reply, Pencil, Trash2, X, Mo
 import { ScrambleText } from '@omerta/hooks/useScrambleText';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import { emojiEncrypt, emojiDecrypt } from '@omerta/utils/emojiCipher';
-import { initE2E, getStoredKeyPair, importPrivateKey, importPublicKey, encryptMessage, decryptMessage } from '@omerta/utils/crypto';
+import { importPrivateKey, openPrivate } from '@omerta/utils/crypto';
 import { AttachmentView, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
@@ -126,22 +126,25 @@ function MessageBubble({
 
   // Auto-decrypt E2E messages
   useEffect(() => {
-    if (message.isE2EEncrypted && !e2ePlaintext && !e2eDecrypting) {
-      setE2eDecrypting(true);
-      const kp = getStoredKeyPair();
-      if (!kp) { setE2eDecrypting(false); return; }
-      importPrivateKey(kp.privateKey)
-        .then(privKey => {
-          try {
-            const payload = JSON.parse(message.content);
-            return decryptMessage(payload, privKey);
-          } catch { return null; }
-        })
-        .then(text => { if (text) setE2ePlaintext(text); })
-        .catch(() => {})
-        .finally(() => setE2eDecrypting(false));
-    }
-  }, [message.isE2EEncrypted, message.content]);
+    if (!message.isE2EEncrypted || e2ePlaintext || e2eDecrypting) return;
+    setE2eDecrypting(true);
+    let dead = false;
+    fetch("/api/keys/mine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: currentUserHandle }),
+    })
+      .then((res) => res.json())
+      .then(async (mine) => {
+        if (!mine?.privateKey || !mine?.publicKey) return null;
+        const payload = JSON.parse(message.content);
+        return openPrivate(payload, await importPrivateKey(mine.privateKey), mine.publicKey);
+      })
+      .then((opened) => { if (!dead && opened) setE2ePlaintext(opened.body); })
+      .catch(() => {})
+      .finally(() => { if (!dead) setE2eDecrypting(false); });
+    return () => { dead = true; };
+  }, [message.isE2EEncrypted, message.content, currentUserHandle]);
 
   const { handlers } = useLongPress({
     ms: 500,
@@ -182,11 +185,12 @@ function MessageBubble({
     );
   }
 
-  const displayContent = message.isE2EEncrypted
-    ? (e2ePlaintext || '// E2E ENCRYPTED //')
+  const opened = message.isE2EEncrypted ? e2ePlaintext : message.content;
+  const displayContent = message.isE2EEncrypted && !e2ePlaintext
+    ? (e2eDecrypting ? "// ENCRYPTED //" : "// ENCRYPTED //")
     : message.isEmojiEncrypted
-      ? (decrypted ? (emojiDecrypt(message.content) || message.content) : message.content)
-      : message.content;
+      ? (decrypted ? (emojiDecrypt(opened || "") || opened || "") : (opened || ""))
+      : (opened || "");
 
   return (
     <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} mb-1 animate-message-in relative group items-end gap-2`}>
@@ -403,10 +407,6 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
   const [inputText, setInputText] = useState('');
   const [burnEnabled, setBurnEnabled] = useState(false);
   const [emojiEnabled, setEmojiEnabled] = useState(false);
-  const [e2eEnabled, setE2EEnabled] = useState(false);
-  const [e2eReady, setE2eReady] = useState(false);
-  const [partnerPublicKey, setPartnerPublicKey] = useState<string | null>(null);
-  const [myKeyPair, setMyKeyPair] = useState<{ publicKey: string; privateKey: string } | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; content: string; sender?: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [profileUser, setProfileUser] = useState<{ handle: string; avatar?: string | null; createdAt?: number } | null>(null);
@@ -417,21 +417,6 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Initialize E2E keys
-  useEffect(() => {
-    initE2E().then(kp => {
-      setMyKeyPair(kp);
-      setE2eReady(true);
-      // Register public key with server
-      fetch('/api/keys/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle: userHandle, publicKey: kp.publicKey }),
-      }).catch(() => {});
-    }).catch(() => setE2eReady(false));
-  }, [userHandle]);
-
-  // Fetch messages when conversation changes
   useEffect(() => {
     if (activeConversationId) {
       fetchMessages(Number(activeConversationId));
@@ -453,15 +438,6 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
   const effectivePartner = partnerHandle || derivedPartner;
 
   const partnerColor = effectivePartner ? `hsl(${Array.from(effectivePartner).reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360}, 70%, 40%)` : 'hsl(var(--primary))';
-
-  // Fetch partner public key when conversation partner changes
-  useEffect(() => {
-    if (!effectivePartner) { setPartnerPublicKey(null); return; }
-    fetch(`/api/keys/${encodeURIComponent(effectivePartner)}`)
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data?.publicKey) setPartnerPublicKey(data.publicKey); else setPartnerPublicKey(null); })
-      .catch(() => setPartnerPublicKey(null));
-  }, [effectivePartner]);
 
   // Fetch partner profile for avatar
   useEffect(() => {
@@ -499,51 +475,36 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
     if (!inputText.trim() || !activeConversationId) return;
     const replyInfo = replyingTo ? { id: replyingTo.id, content: replyingTo.content, sender: replyingTo.sender } : undefined;
     let contentToSend = inputText.trim();
-    let e2e = false;
-
-    // E2E encryption layer (before emoji, so emoji applies to ciphertext if both on)
-    if (e2eEnabled && myKeyPair && partnerPublicKey) {
-      try {
-        const recipientKey = await importPublicKey(partnerPublicKey);
-        const myPrivKey = await importPrivateKey(myKeyPair.privateKey);
-        const payload = await encryptMessage(contentToSend, myPrivKey, recipientKey);
-        contentToSend = JSON.stringify(payload);
-        e2e = true;
-      } catch (err) {
-        showToast('// E2E ENCRYPT FAILED //');
-        return;
-      }
-    }
-
     if (emojiEnabled) contentToSend = emojiEncrypt(contentToSend);
-    sendMessage(contentToSend, burnEnabled, emojiEnabled, e2e, replyInfo);
-    sendPrivateMessage(Number(activeConversationId), userHandle, contentToSend, burnEnabled, emojiEnabled, e2e, replyingTo?.id || null, replyingTo?.content || null, replyingTo?.sender || null);
+    sendMessage(contentToSend, burnEnabled, emojiEnabled, true, replyInfo);
+    await sendPrivateMessage(Number(activeConversationId), userHandle, contentToSend, burnEnabled, emojiEnabled, true, replyingTo?.id || null, replyingTo?.content || null, replyingTo?.sender || null);
+    await fetchMessages(Number(activeConversationId));
     setInputText('');
     setBurnEnabled(false);
     setEmojiEnabled(false);
-    setE2EEnabled(false);
     setReplyingTo(null);
     if (inputRef.current) inputRef.current.style.height = 'auto';
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeConversationId) return;
     setUploading(true);
     const result = await uploadFile(file);
     setUploading(false);
     if (result?.url) {
-      sendPrivateMessage(
+      await sendPrivateMessage(
         Number(activeConversationId),
         userHandle,
         packAttachment(file, result.url),
         burnEnabled,
         false,
-        false,
+        true,
         replyingTo?.id ? String(replyingTo.id) : null,
         replyingTo?.content || null,
-        replyingTo?.sender || null
+        replyingTo?.sender || null,
       );
+      await fetchMessages(Number(activeConversationId));
       setReplyingTo(null);
     } else {
       showToast(result?.error || '// UPLOAD FAILED //');
@@ -713,14 +674,10 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
           </button>
 
           <button
-            onClick={() => {
-              if (!e2eReady) { showToast('// E2E KEYS NOT READY //'); return; }
-              if (!partnerPublicKey) { showToast('// RECIPIENT HAS NO E2E KEY //'); return; }
-              setE2EEnabled(!e2eEnabled);
-            }}
-            className="p-2 transition-colors flex-shrink-0 rounded-md border"
-            style={e2eEnabled ? { borderColor: 'hsl(142, 76%, 36%)', color: 'hsl(142, 76%, 36%)' } : { borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}
-            title="E2E encrypt"
+            type="button"
+            className="p-2 flex-shrink-0 rounded-md border"
+            style={{ borderColor: 'hsl(142, 76%, 36%)', color: 'hsl(142, 76%, 36%)' }}
+            title="End to end encrypted"
           >
             <Shield size={18} />
           </button>
@@ -753,11 +710,9 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
                 // EMOJI ENCRYPTION //
               </span>
             )}
-            {e2eEnabled && (
-              <span className="font-mono text-[10px] animate-pulse whitespace-nowrap" style={{ color: 'hsl(142, 76%, 36%)' }}>
-                // E2E ENCRYPTION //
-              </span>
-            )}
+            <span className="font-mono text-[10px] whitespace-nowrap" style={{ color: 'hsl(142, 76%, 36%)' }}>
+              // END TO END //
+            </span>
             {burnEnabled && (
               <span className="font-mono text-[10px] animate-pulse whitespace-nowrap" style={{ color: 'hsl(var(--destructive))' }}>
                 // BURN AFTER READ //
