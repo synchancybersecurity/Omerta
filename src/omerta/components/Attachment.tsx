@@ -2,7 +2,7 @@ import { FileText } from "lucide-react";
 
 const TOKEN = /\[img:(data:[^[\]]+)\]|\[file:([^:\]]+):(data:[^[\]]+)\]/g;
 
-export const MAX_ATTACHMENT_BYTES = 700 * 1024;
+export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 export function packAttachment(file: File, url: string) {
   if (file.type.startsWith("image/")) return `[img:${url}]`;

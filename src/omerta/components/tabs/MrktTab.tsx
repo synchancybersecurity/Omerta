@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MAX_ATTACHMENT_BYTES } from "@omerta/components/Attachment";
 import { useApp } from "@omerta/store/AppContext";
 import { ArrowLeft, Clock, Gavel, Heart, Plus, Search, Store, Tag } from "lucide-react";
 
@@ -218,8 +219,8 @@ export default function MrktTab() {
 
   const onPhoto = (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 900000) {
-      setNotice("Use an image under 900 KB");
+    if (!file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES) {
+      setNotice("Use an image under 8 MB");
       return;
     }
     const reader = new FileReader();

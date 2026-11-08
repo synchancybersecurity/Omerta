@@ -1,4 +1,5 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
+import { vaultGet, vaultSet } from "@omerta/vault-store";
 
 const KEY = "omerta_db_v1";
 
@@ -264,6 +265,7 @@ function nid() {
 let db: Db = emptyDb();
 let loaded = false;
 let loading: Promise<void> | null = null;
+let lastSaved = "";
 
 function ensureLoaded() {
   if (loaded) return Promise.resolve();
@@ -277,7 +279,7 @@ async function loadAsync() {
     return;
   }
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = await readBlob();
     if (raw) {
       const json = isSealed(raw) ? await openVault(raw) : raw;
       db = { ...emptyDb(), ...JSON.parse(json) };
@@ -294,16 +296,43 @@ async function loadAsync() {
   loaded = true;
 }
 
-let lastSaved = "";
+async function readBlob() {
+  try {
+    const stored = await vaultGet("db");
+    if (stored) return stored;
+  } catch {
+    /* IndexedDB unavailable, use the old slot */
+  }
+  const legacy = localStorage.getItem(KEY);
+  if (!legacy) return null;
+  try {
+    await vaultSet("db", legacy);
+    localStorage.removeItem(KEY);
+  } catch {
+    /* leave the old copy in place */
+  }
+  return legacy;
+}
+
+async function writeBlob(sealed: string) {
+  try {
+    await vaultSet("db", sealed);
+    localStorage.removeItem(KEY);
+  } catch {
+    localStorage.setItem(KEY, sealed);
+  }
+}
 
 function save() {
   try {
     const next = JSON.stringify(db);
     if (next === lastSaved) return;
+    const previous = lastSaved;
     lastSaved = next;
-    void sealVault(next).then((sealed) => {
-      localStorage.setItem(KEY, sealed);
+    void sealVault(next).then((sealed) => writeBlob(sealed)).then(() => {
       if (typeof window !== "undefined") window.dispatchEvent(new Event("omerta-live"));
+    }).catch(() => {
+      lastSaved = previous;
     });
   } catch {
     /* memory copy still stands */

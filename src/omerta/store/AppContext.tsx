@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { vaultDelete, vaultGet, vaultSet } from '@omerta/vault-store';
 import type { Conversation, Message, OpenChatMessage } from '@omerta/types';
 
 const INITIAL_CONVERSATIONS: Conversation[] = [];
@@ -98,8 +99,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<'basic' | 'moderator' | 'admin'>('basic');
   const [theme, setTheme] = useState<ThemeSettings>(loadTheme);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(() => {
-    try { return localStorage.getItem('omerta_avatar'); }
-    catch { return null; }
+    try {
+      const saved = localStorage.getItem('omerta_avatar');
+      if (saved && !saved.startsWith('data:')) return saved;
+      return null;
+    } catch { return null; }
   });
   const [unreadCounts, setUnreadCounts] = useState<UnreadCounts>({
     message: 0, chat: 0, sms: 0, contacts: 0,
@@ -286,7 +290,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if (data && data.avatar) {
         setSelectedAvatar(data.avatar);
-        localStorage.setItem('omerta_avatar', data.avatar);
+        if (String(data.avatar).startsWith('data:')) {
+          void vaultSet('avatar', data.avatar).catch(() => {});
+          try { localStorage.removeItem('omerta_avatar'); } catch { /* ignore */ }
+        } else {
+          try { localStorage.setItem('omerta_avatar', data.avatar); } catch { /* ignore */ }
+        }
       }
     } catch { /* silently fail — use localStorage */ }
   }, []);
@@ -304,10 +313,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveSettingsToServer(DEFAULT_THEME, selectedAvatar);
   }, [saveSettingsToServer, selectedAvatar]);
 
+  useEffect(() => {
+    const saved = (() => { try { return localStorage.getItem('omerta_avatar'); } catch { return null; } })();
+    if (saved && saved.startsWith('data:')) {
+      setSelectedAvatar(saved);
+      void vaultSet('avatar', saved).then(() => { try { localStorage.removeItem('omerta_avatar'); } catch { /* already clear */ } });
+      return;
+    }
+    if (!saved) {
+      void vaultGet('avatar').then((picture) => { if (picture) setSelectedAvatar(picture); }).catch(() => {});
+    }
+  }, []);
+
   const setAvatar = useCallback((avatar: string | null) => {
     setSelectedAvatar(avatar);
-    if (avatar) localStorage.setItem('omerta_avatar', avatar);
-    else localStorage.removeItem('omerta_avatar');
+    if (!avatar) {
+      try { localStorage.removeItem('omerta_avatar'); } catch { /* ignore */ }
+      void vaultDelete('avatar').catch(() => {});
+    } else if (avatar.startsWith('data:')) {
+      try { localStorage.removeItem('omerta_avatar'); } catch { /* ignore */ }
+      void vaultSet('avatar', avatar).catch(() => {});
+    } else {
+      try { localStorage.setItem('omerta_avatar', avatar); } catch { /* ignore */ }
+      void vaultDelete('avatar').catch(() => {});
+    }
     saveSettingsToServer(theme, avatar);
   }, [saveSettingsToServer, theme]);
 
