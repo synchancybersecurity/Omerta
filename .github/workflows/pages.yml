@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
       - run: npm run build:pages
       - run: cp dist-pages/index.html dist-pages/404.html
       - uses: actions/upload-pages-artifact@v3
