@@ -1,0 +1,31 @@
+{
+  "users": [
+    {
+      "id": 1777784701411,
+      "handle": "flint",
+      "role": "basic",
+      "created_at": 1777784701
+    }
+  ],
+  "conversations": [
+    {
+      "id": 1777784701426,
+      "user1_handle": "flint",
+      "user2_handle": "tester",
+      "created_at": 1777784701
+    }
+  ],
+  "messages": [],
+  "openChatMessages": [],
+  "posts": [],
+  "smsMessages": [],
+  "userSettings": {},
+  "escrows": [],
+  "chatRooms": [],
+  "roomMessages": [],
+  "houseSettings": {
+    "holdingWallet": "",
+    "feeWallet": "",
+    "houseFeePercent": 2.25
+  }
+}
