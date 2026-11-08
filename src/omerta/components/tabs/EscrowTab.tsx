@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi } from '@omerta/store/ApiContext';
+import { payHouseCut } from '@omerta/chain';
 import {
   ShieldCheck, Lock, Unlock, AlertTriangle, X,
   Clock, ArrowRight,
@@ -54,8 +55,21 @@ export default function EscrowTab() {
   };
 
   const handleAction = async (id: string, action: 'release' | 'dispute' | 'cancel') => {
+    const row = escrows.find((item) => item.id === id);
     await updateEscrow(id, action);
     await fetchEscrows(userHandle);
+    if (action === 'release' && row && String(row.sender).toLowerCase() === userHandle.trim().toLowerCase() && houseSettings.feeWallet) {
+      const fee = Number((Number(row.amount) * 0.03).toFixed(2));
+      try {
+        const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);
+        if (result.tx) showToast('House cut sent on chain');
+        else if (result.opened) showToast('Approve the USDC transfer in your wallet');
+        else showToast(result.error || 'Wallet did not open', 'error');
+      } catch {
+        showToast('The wallet refused the transfer', 'error');
+      }
+      return;
+    }
     showToast(`// ESCROW ${action.toUpperCase()}D //`);
   };
 

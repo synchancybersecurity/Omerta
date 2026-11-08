@@ -6,6 +6,7 @@ import {
   ShieldCheck, UserPlus, UserCog, Wallet, Landmark, Gavel,
   ChevronDown, User, Crown, Search, X
 } from 'lucide-react';
+import { payHouseCut, readHouseBalance } from '@omerta/chain';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi, API_BASE_URL } from '@omerta/store/ApiContext';
 
@@ -65,17 +66,21 @@ function HouseEscrowSettings() {
   const { userHandle } = useApp();
   const { houseSettings, fetchHouseSettings, saveHouseSettings } = useApi();
   const [feeWallet, setFeeWallet] = useState(houseSettings.feeWallet);
+  const [chain, setChain] = useState(houseSettings.chain || "base");
   const [saved, setSaved] = useState(false);
   const [notice, setNotice] = useState("");
+  const [balance, setBalance] = useState("");
   const isFlint = userHandle.trim().toLowerCase() === "flint";
 
   useEffect(() => { fetchHouseSettings(); }, [fetchHouseSettings]);
   useEffect(() => { setFeeWallet(houseSettings.feeWallet); }, [houseSettings.feeWallet]);
+  useEffect(() => { setChain(houseSettings.chain || "base"); }, [houseSettings.chain]);
 
   const collected = (houseSettings.deposits || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const pending = (houseSettings.payments || []).filter((row) => row.status !== "sent");
 
   const handleSave = async () => {
-    const result = await saveHouseSettings({ feeWallet, actor: userHandle });
+    const result = await saveHouseSettings({ feeWallet, chain, actor: userHandle });
     if (result && result.error) {
       setNotice(result.error);
       return;
@@ -85,14 +90,54 @@ function HouseEscrowSettings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const checkChain = async () => {
+    setNotice("");
+    setBalance("");
+    try {
+      const result = await readHouseBalance(chain, feeWallet);
+      setBalance(result.chain + " is connected. The house wallet holds " + result.usdc.toFixed(2) + " USDC.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "The chain did not answer");
+    }
+  };
+
+  const sendCut = async (row: { id: string; amount: number; wallet: string; chain: string }) => {
+    try {
+      const result = await payHouseCut(row.chain || chain, row.wallet, row.amount);
+      if (result.tx) {
+        await fetch("/api/house/payments/" + row.id + "/sent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tx: result.tx }),
+        });
+        setBalance("Sent " + result.tx);
+        fetchHouseSettings();
+      } else if (result.opened) {
+        setBalance("Approve the USDC transfer in your wallet.");
+      } else {
+        setNotice(result.error || "The wallet did not open");
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "The transfer was refused");
+    }
+  };
+
   return (
     <div className="space-y-4 pt-2">
       <p className="font-mono text-[10px] leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>
-        The house keeps 3 percent of every auction sale and every escrow payment. That cut is credited to the wallet below when the sale or payment clears.
+        The house keeps 3 percent of every auction sale and every escrow payment. On Base or Ethereum that cut is a USDC transfer to the wallet below. Your wallet must approve it. This app never holds the key.
       </p>
       <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
         <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>Credited to the house</span>
         <p className="font-mono text-lg" style={{ color: "hsl(var(--primary))" }}>${collected.toFixed(2)}</p>
+        {balance && <p className="font-mono text-[10px] mt-2 break-all" style={{ color: "hsl(var(--foreground))" }}>{balance}</p>}
+      </div>
+      <div>
+        <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 block" style={{ color: "hsl(var(--muted-foreground))" }}>Chain</label>
+        <select value={chain} disabled={!isFlint} onChange={(e) => setChain(e.target.value)} className="w-full p-2.5 rounded-md font-mono text-xs" style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}>
+          <option value="base">Base</option>
+          <option value="ethereum">Ethereum</option>
+        </select>
       </div>
       <div>
         <label className="font-mono text-[10px] uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: "hsl(var(--muted-foreground))" }}>
@@ -103,12 +148,15 @@ function HouseEscrowSettings() {
           value={feeWallet}
           onChange={e => setFeeWallet(e.target.value)}
           disabled={!isFlint}
-          placeholder="Crypto address for the house cut"
+          placeholder="0x house wallet for USDC"
           className="w-full p-2.5 rounded-md font-mono text-xs focus:outline-none disabled:opacity-60"
           style={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }}
         />
       </div>
       {notice && <p className="font-mono text-[10px]" style={{ color: "hsl(var(--destructive))" }}>{notice}</p>}
+      <button type="button" onClick={() => void checkChain()} className="w-full py-2 font-mono text-xs uppercase tracking-wider rounded-sm border" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }}>
+        Check chain
+      </button>
       {isFlint && (
         <button
           onClick={handleSave}
@@ -118,6 +166,12 @@ function HouseEscrowSettings() {
           {saved ? "// SAVED //" : "Save house wallet"}
         </button>
       )}
+      {pending.map((row) => (
+        <div key={row.id} className="flex items-center justify-between gap-2 font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {row.amount.toFixed(2)} USDC</span>
+          <button type="button" onClick={() => void sendCut(row)} className="px-2 py-1 uppercase" style={{ color: "hsl(var(--primary))" }}>Send</button>
+        </div>
+      ))}
       {(houseSettings.deposits || []).slice(0, 8).map((row) => (
         <div key={row.id} className="flex items-center justify-between font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
           <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · ${Number(row.gross).toFixed(2)}</span>

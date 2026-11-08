@@ -1,5 +1,6 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
+import { isEvmAddress } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
 
@@ -62,12 +63,25 @@ type Db = {
   chatRooms: Room[];
   roomMessages: Array<Record<string, unknown>>;
   roomClearedAt: number;
-  houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number };
+  houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number; chain: string };
   houseDeposits: HouseDeposit[];
+  chainPayments: ChainPayment[];
   publicKeys: Record<string, string>;
   listings: Listing[];
 };
 
+type ChainPayment = {
+  id: string;
+  source: "auction" | "escrow";
+  source_id: string;
+  payer: string;
+  amount: number;
+  wallet: string;
+  chain: string;
+  status: "pending" | "sent";
+  tx: string;
+  timestamp: number;
+};
 type HouseDeposit = {
   id: string;
   source: "auction" | "escrow";
@@ -100,22 +114,38 @@ const ROOM_CLEAR_MS = 48 * 60 * 60 * 1000;
 
 const HOUSE_CUT = 0.03;
 
-function creditHouse(source: "auction" | "escrow", sourceId: string, gross: number) {
+function creditHouse(source: "auction" | "escrow", sourceId: string, gross: number, payer = "") {
   if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
-  if (db.houseDeposits.some((row) => row.source === source && row.source_id === sourceId)) {
-    return db.houseDeposits.find((row) => row.source === source && row.source_id === sourceId)?.amount || 0;
-  }
+  if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
+  const existing = db.houseDeposits.find((row) => row.source === source && row.source_id === sourceId);
+  if (existing) return existing.amount;
   const amount = Number((Number(gross) * HOUSE_CUT).toFixed(2));
   if (!(amount > 0)) return 0;
+  const wallet = (db.houseSettings?.feeWallet || "").trim();
+  const chain = db.houseSettings?.chain || "base";
   db.houseDeposits.unshift({
     id: "fee" + nid(),
     source,
     source_id: sourceId,
     gross: Number(gross),
     amount,
-    wallet: (db.houseSettings?.feeWallet || "").trim(),
+    wallet,
     timestamp: Date.now(),
   });
+  if (isEvmAddress(wallet)) {
+    db.chainPayments.unshift({
+      id: "pay" + nid(),
+      source,
+      source_id: sourceId,
+      payer,
+      amount,
+      wallet,
+      chain,
+      status: "pending",
+      tx: "",
+      timestamp: Date.now(),
+    });
+  }
   return amount;
 }
 
@@ -142,7 +172,7 @@ function settleLot(lot: Listing) {
     lot.status = "sold";
     lot.winner = top.bidder;
     lot.sold_price = top.amount;
-    lot.house_fee = creditHouse("auction", lot.id, top.amount);
+    lot.house_fee = creditHouse("auction", lot.id, top.amount, top.bidder);
   } else {
     lot.status = "ended";
     lot.winner = null;
@@ -226,8 +256,9 @@ function emptyDb(): Db {
       },
     ],
     roomClearedAt: now,
-    houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3 },
+    houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3, chain: "base" },
     houseDeposits: [],
+    chainPayments: [],
     publicKeys: {},
     listings: [],
   };
@@ -260,8 +291,9 @@ async function loadAsync() {
     if (raw) {
       const json = isSealed(raw) ? await openVault(raw) : raw;
       db = { ...emptyDb(), ...JSON.parse(json) };
-      db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3 };
+      db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: db.houseSettings?.chain || "base" };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
+      if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
       const stripped = stripDemo();
       if (!isSealed(raw) || stripped) {
         lastSaved = "";
@@ -603,19 +635,36 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "house" && seg[1] === "settings" && method === "GET") {
     db.houseSettings.houseFeePercent = 3;
-    return json({ ...db.houseSettings, deposits: db.houseDeposits || [] });
+    return json({ ...db.houseSettings, deposits: db.houseDeposits || [], payments: db.chainPayments || [] });
   }
   if (seg[0] === "house" && seg[1] === "settings" && method === "POST") {
     const body = await readJson(input, init);
     const actor = String(body.actor || "").trim().toLowerCase();
     if (actor !== "flint") return json({ error: "Only the house can set this wallet" }, 403);
-    const wallet = String(body.feeWallet ?? "").trim();
+    const wallet = String(body.feeWallet ?? db.houseSettings.feeWallet ?? "").trim();
+    const chain = body.chain === "ethereum" ? "ethereum" : "base";
     db.houseSettings.feeWallet = wallet;
     db.houseSettings.holdingWallet = wallet;
+    db.houseSettings.chain = chain;
     db.houseSettings.houseFeePercent = 3;
     sweepHouseWallet(wallet);
+    for (const row of db.chainPayments || []) {
+      if (row.status === "pending") {
+        row.wallet = wallet;
+        row.chain = chain;
+      }
+    }
     save();
-    return json({ success: true, ...db.houseSettings, deposits: db.houseDeposits || [] });
+    return json({ success: true, ...db.houseSettings, deposits: db.houseDeposits || [], payments: db.chainPayments || [] });
+  }
+  if (seg[0] === "house" && seg[1] === "payments" && seg[3] === "sent" && method === "POST") {
+    const row = (db.chainPayments || []).find((item) => item.id === seg[2]);
+    if (!row) return json({ error: "Not found" }, 404);
+    const body = await readJson(input, init);
+    row.status = "sent";
+    row.tx = String(body.tx || "");
+    save();
+    return json(row);
   }
 
   if (seg[0] === "escrow" && seg[1] === "all" && method === "GET") {
@@ -665,7 +714,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     escrow.resolved_by = body.adminHandle;
     escrow.resolution_note = body.note || "";
     if (escrow.status === "released") {
-      escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount));
+      escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount), String(escrow.sender || ""));
       escrow.house_fee_percent = 3;
       escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
     }
@@ -679,7 +728,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (!escrow || !map[seg[2]]) return json({ error: "Not found" }, 404);
     escrow.status = map[seg[2]];
     if (escrow.status === "released") {
-      escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount));
+      escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount), String(escrow.sender || ""));
       escrow.house_fee_percent = 3;
       escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
     }
@@ -993,7 +1042,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     lot.status = "sold";
     lot.winner = bidder;
     lot.sold_price = lot.buy_now;
-    lot.house_fee = creditHouse("auction", lot.id, lot.buy_now);
+    lot.house_fee = creditHouse("auction", lot.id, lot.buy_now, bidder);
     lot.ends_at = Date.now();
     save();
     return json(lot);

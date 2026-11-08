@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { payHouseCut } from "@omerta/chain";
 import { MAX_ATTACHMENT_BYTES, VaultImg } from "@omerta/components/Attachment";
 import { useApp } from "@omerta/store/AppContext";
 import { ArrowLeft, Clock, Gavel, Heart, Plus, Search, Store, Tag } from "lucide-react";
@@ -166,6 +167,28 @@ export default function MrktTab() {
     }
     setNotice("You bought this lot");
     await load();
+    const house = await fetch("/api/house/settings").then((response) => response.json()).catch(() => null);
+    if (house?.feeWallet && lot.buy_now) {
+      const fee = Number((lot.buy_now * 0.03).toFixed(2));
+      try {
+        const result = await payHouseCut(house.chain || "base", house.feeWallet, fee);
+        const payment = (house.payments || []).find((row: { source_id: string; status: string; id: string }) => row.source_id === lot.id && row.status !== "sent");
+        if (result.tx && payment) {
+          await fetch("/api/house/payments/" + payment.id + "/sent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tx: result.tx }),
+          });
+          setNotice("House cut sent on chain");
+        } else if (result.opened) {
+          setNotice("Approve the 3 percent USDC transfer in your wallet");
+        } else if (result.error) {
+          setNotice(result.error);
+        }
+      } catch {
+        setNotice("The wallet refused the house cut");
+      }
+    }
   };
 
   const watch = async (lot: Listing) => {
