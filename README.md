@@ -44,7 +44,7 @@ After that, launch it from the icon like any other app. If a change does not sho
 
 ## Sign in
 
-Type the handle and the passphrase you used the first time on that device. Capital letters in the handle do not matter. Flint and flint are the same person.
+Type the handle and the passphrase you used the first time on that device. Capital letters in the handle do not matter.
 
 If the passphrase does not match what this phone saved, the screen says so. It will not pretend you are trying to create a second account.
 
