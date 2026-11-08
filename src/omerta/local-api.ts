@@ -166,9 +166,15 @@ function load() {
   }
 }
 
+let lastSaved = "";
+
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(db));
+    const next = JSON.stringify(db);
+    if (next === lastSaved) return;
+    lastSaved = next;
+    localStorage.setItem(KEY, next);
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("omerta-live"));
   } catch {
     /* memory copy still stands */
   }

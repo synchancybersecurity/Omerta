@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useApp } from '@omerta/store/AppContext';
 
 interface Reply {
   id: string;
@@ -134,6 +135,7 @@ const ApiContext = createContext<ApiContextValue | null>(null);
 export const API_BASE_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
 export function ApiProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, userHandle, activeConversationId: openConversationId } = useApp();
   const [wsConnected, setWsConnected] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ApiContextValue['conversations']>([]);
@@ -528,6 +530,55 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
+  const liveRoomRef = useRef(activeRoomId);
+  const liveConvRef = useRef(openConversationId);
+  liveRoomRef.current = activeRoomId;
+  liveConvRef.current = openConversationId;
+  const refreshingRef = useRef(false);
+  const pendingRef = useRef(false);
+
+  const refreshLive = useCallback(async () => {
+    if (!isAuthenticated || !userHandle) return;
+    if (refreshingRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    refreshingRef.current = true;
+    try {
+      await Promise.all([
+        fetchOpenChat(),
+        fetchChatRooms(),
+        fetchPosts(),
+        fetchConversations(userHandle),
+        fetchSMS(userHandle),
+      ]);
+      const room = liveRoomRef.current;
+      if (room && room !== "general") await fetchRoomMessages(room);
+      const conv = liveConvRef.current;
+      if (conv) await fetchMessages(Number(conv));
+    } finally {
+      refreshingRef.current = false;
+      if (pendingRef.current) {
+        pendingRef.current = false;
+        void refreshLive();
+      }
+    }
+  }, [isAuthenticated, userHandle, fetchOpenChat, fetchChatRooms, fetchPosts, fetchConversations, fetchSMS, fetchRoomMessages, fetchMessages]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !userHandle) return;
+    void refreshLive();
+    const tick = window.setInterval(() => { void refreshLive(); }, 2000);
+    const onLive = () => { void refreshLive(); };
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshLive(); };
+    window.addEventListener("omerta-live", onLive);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(tick);
+      window.removeEventListener("omerta-live", onLive);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isAuthenticated, userHandle, refreshLive]);
 
   return (
     <ApiContext.Provider value={{
