@@ -22,17 +22,46 @@ Omertà is a private communications app for people who use a handle instead of a
 
 ## Overview
 
-Each person signs in with a handle and a passphrase. A new pair creates an account on that device. The same pair opens it again later. Capitalization of the handle does not matter.
+Each person signs in with a handle and a passphrase. A new pair creates an account on that device. The same pair opens it again later. Capitalization of the handle does not matter. The passphrase is case sensitive.
 
-The app includes a profile, a news feed, private messages, contacts, chat rooms, an escrow desk, and settings. New messages appear while you remain on the current screen.
+The interface is a single dark room with a bottom bar. Each section stays available without a page reload. When a message, post, or room changes, the open screen updates on its own.
+
+| Section | What it is for |
+|---|---|
+| Profile | Your handle, portrait, and the posts you publish. |
+| News | The shared feed for this device. Posts can be liked, answered, or shared into a room. |
+| Chat | The Lounge and any rooms you create. |
+| Message | Private conversations between two handles. |
+| Contacts | Search for a handle and start a private thread. |
+| Escrow | Hold an amount between two handles until it is released, disputed, or cancelled. |
+| MRKT | Reserved for a later auction desk. It is not open yet. |
+| Settings | Display, notification, and account preferences for this device. |
 
 ## Chat rooms
 
-The Lounge is open to every handle on the device. Any member may create an additional room. A room may be locked with a passphrase. The creator can always reenter a locked room. Other members need the passphrase.
+The Lounge is open to every handle on the device. Any member may create an additional room and name it. A room may be left open, or locked with its own passphrase.
 
-All chat rooms, including locked rooms, are cleared every 48 hours. Private messages are not included in that clear.
+The creator can always return to a room they locked. Everyone else must enter the passphrase. A locked room does not hide the room name. It only keeps the conversation behind the passphrase.
 
-Posts may be plain text, set to burn after reading, or wrapped in the emoji cipher.
+All chat rooms, including locked rooms and the Lounge, are cleared every 48 hours. The room names remain. The messages do not. Private conversations are not part of that clear.
+
+Inside a room you can reply to a message, or wrap the text in the emoji cipher before it is sent. The cipher is a disguise for the text. It is separate from the AES seal on the stored vault.
+
+## Messages and posts
+
+Private messages appear in the thread as soon as they are sent. You do not need to leave the screen and come back. The same is true for the Lounge, custom rooms, and the news feed.
+
+A post or a private message can be marked to burn after it is read. A burned message is replaced with a burned notice. It is not restored.
+
+A member can also turn on end to end encryption for a private thread. That option encrypts the message for the other handle before it is stored. It is optional. The vault seal still covers everything on disk either way.
+
+## Security
+
+The browser vault is encrypted with AES 256 GCM before it is written to device storage. Someone reading the saved file sees ciphertext, not the messages, handles, or passphrases.
+
+The key that opens that vault stays on the same device. It is not published in this repository. Clearing the browser site data removes both the vault and the key. There is no recovery from another machine.
+
+The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one.
 
 ## Install
 
@@ -45,11 +74,9 @@ Omertà can be added to a phone home screen.
 
 The icon is the coin. The name is Omertà. After an update, close the app completely and open it again.
 
-## Accounts and data
+## Accounts
 
 Sign in with the handle and passphrase saved on that device. If the passphrase does not match, the screen reports that directly. It does not treat the attempt as a new account.
-
-The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one.
 
 ## Local development
 
