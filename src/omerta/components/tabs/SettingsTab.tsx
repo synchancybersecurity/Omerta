@@ -512,11 +512,12 @@ function DataWipe() {
       .then((data) => {
         if (dead) return;
         setEnabled(Boolean(data.wipeEnabled));
+        setDays(Math.min(7, Math.max(1, Number(data.wipeDays) || 1)));
         setWipeAt(Number(data.wipeAt) || 0);
       })
       .catch(() => {});
     return () => { dead = true; };
-  }, [enabled, wipeAt, now >= wipeAt, userHandle]);
+  }, [enabled, wipeAt, userHandle, now < wipeAt ? 0 : Math.floor(now / 5000)]);
 
   useEffect(() => {
     if (!userHandle) return;
@@ -531,16 +532,28 @@ function DataWipe() {
   }, [userHandle]);
 
   const save = async (nextEnabled: boolean, nextDays: number) => {
-    setEnabled(nextEnabled);
-    setDays(nextDays);
     const res = await fetch(`/api/settings/${encodeURIComponent(userHandle)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wipeEnabled: nextEnabled, wipeDays: nextDays }),
     });
+    if (!res.ok) {
+      setNotice("Could not save the switch.");
+      return;
+    }
     const data = await res.json();
+    setEnabled(Boolean(data.wipeEnabled));
+    setDays(Math.min(7, Math.max(1, Number(data.wipeDays) || nextDays)));
     setWipeAt(Number(data.wipeAt) || 0);
-    setNotice(nextEnabled ? "Dead man's switch is on." : "Dead man's switch is off.");
+    setNotice(data.wipeEnabled ? "Dead man's switch is on." : "Dead man's switch is off.");
+  };
+
+  const pickDays = (value: number) => {
+    if (!enabled) {
+      setDays(value);
+      return;
+    }
+    if (value !== days) setConfirmDays(value);
   };
 
   return (
@@ -551,12 +564,12 @@ function DataWipe() {
           <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>Turn this on and choose 1 to 7 days. When the time is up, your messages, posts, auctions, and the rest of your stored info are deleted. Your handle stays.</p>
         </div>
         <button type="button" onClick={() => enabled ? void save(false, days) : setConfirmDays(days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border whitespace-nowrap" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
-          {enabled && wipeAt > now ? countdown(wipeAt - now) : enabled ? "On" : "Off"}
+          {enabled && wipeAt > 0 ? countdown(wipeAt - now) : "Off"}
         </button>
       </div>
       <div className="flex gap-2 mt-3">
         {[1, 2, 3, 4, 5, 6, 7].map((value) => (
-          <button key={value} type="button" onClick={() => void save(enabled, value)} className="flex-1 py-2 rounded-sm font-mono text-[10px] border" style={{ borderColor: days === value ? "hsl(var(--primary))" : "hsl(var(--border))", color: days === value ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>{value}d</button>
+          <button key={value} type="button" onClick={() => pickDays(value)} className="flex-1 py-2 rounded-sm font-mono text-[10px] border" style={{ borderColor: days === value ? "hsl(var(--primary))" : "hsl(var(--border))", color: days === value ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>{value}d</button>
         ))}
       </div>
       {enabled && wipeAt > 0 && <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--primary))" }}>Fires {new Date(wipeAt).toLocaleString()}.</p>}
