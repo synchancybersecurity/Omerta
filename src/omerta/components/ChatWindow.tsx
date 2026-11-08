@@ -6,6 +6,7 @@ import { ScrambleText } from '@omerta/hooks/useScrambleText';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import { emojiEncrypt, emojiDecrypt } from '@omerta/utils/emojiCipher';
 import { initE2E, getStoredKeyPair, importPrivateKey, importPublicKey, encryptMessage, decryptMessage } from '@omerta/utils/crypto';
+import { AttachmentView, MAX_ATTACHMENT_BYTES, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
 function formatTime(ts: number) {
@@ -261,21 +262,11 @@ function MessageBubble({
                   >Cancel</button>
                 </div>
               </div>
-            ) : displayContent.startsWith('[img:') && displayContent.endsWith(']') ? (
-              <div className="max-w-[240px]">
-                <img
-                  src={displayContent.slice(5, -1)}
-                  alt="shared"
-                  className="w-full rounded-md cursor-pointer"
-                  loading="lazy"
-                  onClick={(e) => { e.stopPropagation(); window.open(displayContent.slice(5, -1), '_blank'); }}
-                />
-              </div>
             ) : (
-              <p className={`font-mono text-sm leading-relaxed break-words ${isBurned || isDeleted ? 'italic' : message.isE2EEncrypted && !e2ePlaintext ? 'italic' : message.isEmojiEncrypted && !decrypted ? 'text-base' : ''}`} style={{ color: isBurned || isDeleted ? 'hsl(var(--muted-foreground))' : message.isE2EEncrypted && !e2ePlaintext ? 'hsl(142, 76%, 36%)' : message.isEmojiEncrypted && !decrypted ? undefined : 'hsl(var(--bubble-text))' }}>
-                {displayContent}
+              <div style={{ color: 'hsl(var(--bubble-text))' }}>
+                <AttachmentView content={displayContent} />
                 {message.edited && !isDeleted && <span className="text-[10px] ml-1" style={{ color: 'hsl(var(--muted-foreground))' }}>(edited)</span>}
-              </p>
+              </div>
             )}
           </div>
 
@@ -525,8 +516,8 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('// UNSUPPORTED FILE TYPE //');
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      showToast('// FILE TOO LARGE //');
       return;
     }
     setUploading(true);
@@ -536,7 +527,7 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
       sendPrivateMessage(
         Number(activeConversationId),
         userHandle,
-        `[img:${result.url}]`,
+        packAttachment(file, result.url),
         burnEnabled,
         false,
         false,
@@ -684,7 +675,7 @@ export default function ChatWindow({ onBack }: { onBack?: () => void }) {
               <div className="flex items-center gap-2 mb-1.5 px-1">
                 <Reply size={10} style={{ color: 'hsl(var(--primary) / 0.6)' }} />
                 <span className="font-mono text-[10px] truncate" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                  Replying to {replyingTo.sender || 'message'}: {replyingTo.content.slice(0, 40)}{replyingTo.content.length > 40 ? '...' : ''}
+                  Replying to {replyingTo.sender || 'message'}: {attachmentLabel(replyingTo.content).slice(0, 40)}
                 </span>
                 <button onClick={() => setReplyingTo(null)} style={{ color: 'hsl(var(--muted-foreground))' }}>
                   <X size={10} />

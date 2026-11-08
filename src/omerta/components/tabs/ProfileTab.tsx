@@ -6,6 +6,7 @@ import {
   Users, Shield, Pencil, Trash2, X, ChevronDown, ChevronUp, UserCircle, Hash,
 } from 'lucide-react';
 import { emojiEncrypt } from '@omerta/utils/emojiCipher';
+import { AttachmentView, MAX_ATTACHMENT_BYTES, packAttachment } from '@omerta/components/Attachment';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import EditProfileModal from '@omerta/components/EditProfileModal';
 import UserProfileModal from '@omerta/components/UserProfileModal';
@@ -215,15 +216,13 @@ function PostCard({
 
       {/* Content */}
       <div className="px-4 md:px-6 pb-3">
-        <p
-          className={`font-mono text-sm leading-relaxed break-words ${
-            isEncrypted && !isDecrypted ? 'tracking-widest text-lg' : ''
-          }`}
-          style={{ color: 'hsl(var(--card-foreground))' }}
+        <div
+          className={isEncrypted && !isDecrypted ? "font-mono text-sm leading-relaxed break-words tracking-widest text-lg" : ""}
+          style={{ color: "hsl(var(--card-foreground))" }}
           {...(isEncrypted ? longPress.handlers : {})}
         >
-          {displayContent}
-        </p>
+          {isEncrypted && !isDecrypted ? displayContent : <AttachmentView content={post.content} />}
+        </div>
         {isEncrypted && (
           <p className="font-mono text-[10px] mt-1" style={{ color: isDecrypted ? 'hsl(142, 76%, 36%)' : 'hsl(var(--primary))' }}>
             {isDecrypted ? '// DECRYPTED //' : '// HOLD TO DECRYPT //'}
@@ -359,7 +358,7 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
   const [newPostContent, setNewPostContent] = useState('');
   const [emojiMode, setEmojiMode] = useState(false);
   const [burnMode, setBurnMode] = useState(false);
-  const [postImageUrl, setPostImageUrl] = useState<string | null>(null);
+  const [postAttach, setPostAttach] = useState<string | null>(null);
   const [postUploading, setPostUploading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'encrypted' | 'burned'>('all');
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -477,15 +476,14 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
   };
 
   const handleCreatePost = () => {
-    const content = postImageUrl
-      ? `${newPostContent.trim()}\n\n[img:${postImageUrl}]`
-      : newPostContent.trim();
+    const written = newPostContent.trim();
+    const content = postAttach ? (written ? `${written}\n\n${postAttach}` : postAttach) : written;
     if (!content) return;
     createPost(userHandle, `@${userHandle.toLowerCase()}`, content, emojiMode, burnMode, selectedAvatar);
     setNewPostContent('');
     setEmojiMode(false);
     setBurnMode(false);
-    setPostImageUrl(null);
+    setPostAttach(null);
     showToast('// POST PUBLISHED //');
   };
 
@@ -760,16 +758,31 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
         <div className="px-4 md:px-6 mb-4">
           <div className="p-4 border rounded-lg" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--card))' }}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-mono text-xs uppercase tracking-wider" style={{ color: 'hsl(var(--primary))' }}>Select Avatar</h3>
-              {selectedAvatar && (
-                <button
-                  onClick={() => { setSelectedAvatar(null); setShowAvatarPicker(false); }}
-                  className="font-mono text-[10px] uppercase px-2 py-1 rounded-sm transition-all"
-                  style={{ border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}
-                >
-                  Clear
-                </button>
-              )}
+              <h3 className="font-mono text-xs uppercase tracking-wider" style={{ color: "hsl(var(--primary))" }}>Select Avatar</h3>
+              <div className="flex items-center gap-2">
+                {selectedAvatar && (
+                  <button type="button" onClick={() => { setSelectedAvatar(null); setShowAvatarPicker(false); }} className="font-mono text-[10px] uppercase px-2 py-1 rounded-sm" style={{ border: "1px solid hsl(var(--border))", color: "hsl(var(--muted-foreground))" }}>Clear</button>
+                )}
+                <label className="font-mono text-[10px] uppercase px-2 py-1 rounded-sm cursor-pointer" style={{ border: "1px solid hsl(var(--primary))", color: "hsl(var(--primary))" }}>
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file || !file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setSelectedAvatar(String(reader.result));
+                        setShowAvatarPicker(false);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-3">
               {PRESET_AVATARS.map((avatar) => (
@@ -869,15 +882,16 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
             className="w-full rounded-lg px-3 py-2 font-mono text-sm focus:outline-none resize-none transition-colors mb-3"
             style={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }}
           />
-          {postImageUrl && (
+          {postAttach?.startsWith("[img:") && (
             <div className="mt-2 mb-2 relative">
-              <img src={postImageUrl} alt="" className="w-full max-h-40 object-cover rounded-lg" style={{ border: '1px solid hsl(var(--border))' }} />
-              <button
-                onClick={() => setPostImageUrl(null)}
-                className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"
-              >
-                <X size={12} />
-              </button>
+              <img src={postAttach.slice(5, -1)} alt="" className="w-full max-h-40 object-cover rounded-lg" style={{ border: "1px solid hsl(var(--border))" }} />
+              <button onClick={() => setPostAttach(null)} className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"><X size={12} /></button>
+            </div>
+          )}
+          {postAttach?.startsWith("[file:") && (
+            <div className="mt-2 mb-2 flex items-center justify-between px-2 py-2 rounded-sm border" style={{ borderColor: "hsl(var(--border))" }}>
+              <span className="font-mono text-[10px]" style={{ color: "hsl(var(--foreground))" }}>File attached</span>
+              <button onClick={() => setPostAttach(null)} style={{ color: "hsl(var(--muted-foreground))" }}><X size={12} /></button>
             </div>
           )}
           <div className="flex items-center justify-between">
@@ -899,29 +913,30 @@ export default function ProfileTab({ mode = 'own' }: { mode?: 'own' | 'feed' }) 
               </button>
               <input
                 type="file"
-                accept="image/*"
                 className="hidden"
                 id="post-image-upload"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
+                  e.target.value = "";
                   if (!file) return;
+                  if (file.size > MAX_ATTACHMENT_BYTES) { showToast("// FILE TOO LARGE //"); return; }
                   setPostUploading(true);
                   const data = await uploadFile(file);
-                  if (data && data.url) setPostImageUrl(data.url);
+                  if (data && data.url) setPostAttach(packAttachment(file, data.url));
                   setPostUploading(false);
                 }}
               />
               <label
                 htmlFor="post-image-upload"
                 className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider border rounded-sm transition-all flex items-center gap-1 cursor-pointer"
-                style={{ borderColor: postImageUrl ? 'hsl(var(--primary))' : 'hsl(var(--border))', color: postImageUrl ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }}
+                style={{ borderColor: postAttach ? "hsl(var(--primary))" : "hsl(var(--border))", color: postAttach ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}
               >
-                {postUploading ? '...' : postImageUrl ? 'IMG+' : 'IMG'}
+                {postUploading ? "..." : postAttach ? "FILE+" : "FILE"}
               </label>
             </div>
             <button
               onClick={handleCreatePost}
-              disabled={!newPostContent.trim()}
+              disabled={!newPostContent.trim() && !postAttach}
               className="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider rounded-sm hover:brightness-110 disabled:opacity-30 transition-all flex items-center gap-1"
               style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
             >

@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi } from '@omerta/store/ApiContext';
-import {
-  Hash, Lock, Send, X, Reply, ChevronLeft,
-  Plus, Trash2, Globe, Users
-} from 'lucide-react';
 import { emojiEncrypt, emojiDecrypt } from '@omerta/utils/emojiCipher';
+import { Hash, Lock, Send, X, Reply, ChevronLeft, Plus, Trash2, Globe, Users, Paperclip } from 'lucide-react';
+import { AttachmentView, MAX_ATTACHMENT_BYTES, attachmentLabel, packAttachment } from '@omerta/components/Attachment';
 import { useLongPress } from '@omerta/hooks/useLongPress';
 import UserProfileModal from '@omerta/components/UserProfileModal';
 
@@ -59,7 +57,7 @@ function RoomBubble({ msg, isMe, currentUserHandle, onReply, onViewUser }: {
                 Replying to {msg.reply_sender === currentUserHandle ? 'You' : (msg.reply_sender || 'unknown')}
               </span>
             </div>
-            <p className="font-mono text-[11px] truncate" style={{ color: 'hsl(var(--bubble-meta))' }}>{msg.reply_content}</p>
+            <p className="font-mono text-[11px] truncate" style={{ color: 'hsl(var(--bubble-meta))' }}>{attachmentLabel(msg.reply_content)}</p>
           </div>
         )}
 
@@ -78,7 +76,11 @@ function RoomBubble({ msg, isMe, currentUserHandle, onReply, onViewUser }: {
           <div className="flex items-center gap-2 mb-1">
             <span className="font-serif text-xs tracking-wider" style={{ color: isMe ? 'hsl(var(--accent-sent))' : 'hsl(var(--accent-recv))' }}>{msg.sender_handle}</span>
           </div>
-          <p className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: isMe ? 'hsl(var(--sent-text))' : 'hsl(var(--recv-text))', fontWeight: 500 }}>{displayContent}</p>
+          {isEncrypted && !decrypted ? (
+            <p className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: isMe ? 'hsl(var(--sent-text))' : 'hsl(var(--recv-text))' }}>{displayContent}</p>
+          ) : (
+            <div style={{ color: isMe ? 'hsl(var(--sent-text))' : 'hsl(var(--recv-text))' }}><AttachmentView content={displayContent} /></div>
+          )}
           <span className="font-mono text-[9px] mt-1 block opacity-50" style={{ color: isMe ? 'hsl(var(--sent-meta))' : 'hsl(var(--recv-meta))' }}>
             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
@@ -103,7 +105,7 @@ export default function ChatTab() {
     chatRooms, fetchChatRooms, createChatRoom, deleteChatRoom, lockChatRoom, unlockChatRoom,
     roomMessages, fetchRoomMessages, sendRoomMessage,
     activeRoomId, setActiveRoomId, userProfiles, fetchUserProfile,
-    createConversation, fetchConversations,
+    createConversation, fetchConversations, uploadFile,
   } = useApi();
 
   const [input, setInput] = useState('');
@@ -117,6 +119,8 @@ export default function ChatTab() {
   const [roomLocked, setRoomLocked] = useState(false);
   const [roomPassword, setRoomPassword] = useState('');
   const [enterPassword, setEnterPassword] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [passwordRoom, setPasswordRoom] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -172,6 +176,23 @@ export default function ChatTab() {
     setEmojiMode(false);
     setReplyingTo(null);
     if (inputRef.current) inputRef.current.style.height = 'auto';
+  };
+
+  const handleAttach = async (file: File | undefined) => {
+    if (!file || !activeRoomId) return;
+    if (file.size > MAX_ATTACHMENT_BYTES) { showToast("// FILE TOO LARGE //"); return; }
+    setUploading(true);
+    const result = await uploadFile(file);
+    setUploading(false);
+    if (!result?.url) { showToast("// UPLOAD FAILED //"); return; }
+    const packed = packAttachment(file, result.url);
+    if (activeRoomId === "general") {
+      sendOpenChatMessage(userHandle, packed, false, false, replyingTo?.id || null, replyingTo?.content || null, replyingTo?.sender || null);
+    } else {
+      sendRoomMessage(activeRoomId, userHandle, packed, false, false, replyingTo?.id || null, replyingTo?.content || null, replyingTo?.sender || null);
+    }
+    setReplyingTo(null);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const handleCreateRoom = async () => {
@@ -558,6 +579,10 @@ export default function ChatTab() {
       {/* Input */}
       <div className="px-3 py-3 border-b z-10" style={{ background: 'hsl(var(--background))', borderColor: 'hsl(var(--border))' }}>
         <div className="flex items-end gap-2">
+          <input ref={fileRef} type="file" accept="image/*,.pdf,.txt,.zip,.doc,.docx,.mp3,.mp4" className="hidden" onChange={(e) => { void handleAttach(e.target.files?.[0]); }} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2 rounded-md border flex-shrink-0 disabled:opacity-40" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }} title="Attach a photo or file">
+            <Paperclip size={16} />
+          </button>
           <div className="flex-1 min-w-0">
             <textarea ref={inputRef} value={input} onChange={handleChange} onKeyDown={handleKeyDown}
               placeholder={replyingTo ? 'Write a reply...' : `Send to ${activeRoomName.toLowerCase()}...`} rows={1}
