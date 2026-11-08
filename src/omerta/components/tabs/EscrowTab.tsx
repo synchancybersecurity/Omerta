@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi } from '@omerta/store/ApiContext';
-import { payHouseCut } from '@omerta/chain';
+import { payHouseCut, recordHouseTx } from '@omerta/chain';
 import {
   ShieldCheck, Lock, Unlock, AlertTriangle, X,
   Clock, ArrowRight,
@@ -46,7 +46,7 @@ export default function EscrowTab() {
       return;
     }
     setLoading(true);
-    await createEscrow(userHandle, recipient.trim(), Number(amount), description);
+    const created = await createEscrow(userHandle, recipient.trim(), Number(amount), description);
     await fetchEscrows(userHandle);
     setLoading(false);
     setShowCreate(false);
@@ -55,6 +55,7 @@ export default function EscrowTab() {
     if (houseSettings.feeWallet && fee > 0) {
       try {
         const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);
+        if (result.tx && created?.id) await recordHouseTx(String(created.id), result.tx);
         if (result.tx) showToast('House cut sent on chain');
         else if (result.opened) showToast('Approve the USDC transfer in your wallet');
         else showToast(result.error || '// ESCROW CREATED //');
@@ -70,10 +71,13 @@ export default function EscrowTab() {
     const row = escrows.find((item) => item.id === id);
     await updateEscrow(id, action);
     await fetchEscrows(userHandle);
-    if ((action === 'release' || action === 'cancel') && row && String(row.sender).toLowerCase() === userHandle.trim().toLowerCase() && houseSettings.feeWallet) {
+    const house = await fetch('/api/house/settings').then((response) => response.json()).catch(() => null);
+    const alreadySent = (house?.payments || []).some((row: { source_id: string; status: string }) => row.source_id === id && row.status === 'sent');
+    if ((action === 'release' || action === 'cancel') && !alreadySent && row && String(row.sender).toLowerCase() === userHandle.trim().toLowerCase() && houseSettings.feeWallet) {
       const fee = Number((Number(row.amount) * 0.03).toFixed(2));
       try {
         const result = await payHouseCut(houseSettings.chain || 'base', houseSettings.feeWallet, fee);
+        if (result.tx) await recordHouseTx(id, result.tx);
         if (result.tx) showToast('House cut sent on chain');
         else if (result.opened) showToast('Approve the USDC transfer in your wallet');
         else showToast(result.error || 'Wallet did not open', 'error');

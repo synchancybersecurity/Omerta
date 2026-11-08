@@ -92,6 +92,18 @@ export async function exportHouseUsdc(key: string, chainName: string, to: string
   }
 }
 
+export async function recordHouseTx(sourceId: string, tx: string) {
+  const house = await fetch("/api/house/settings").then((response) => response.json()).catch(() => null);
+  const payment = (house?.payments || []).find((row: { id: string; source_id: string; status: string }) => row.status !== "sent" && row.source_id === sourceId)
+    || (house?.payments || []).find((row: { id: string; source_id: string; status: string }) => row.status !== "sent" && row.source_id.startsWith(sourceId + ":"));
+  if (!payment) return;
+  await fetch("/api/house/payments/" + payment.id + "/sent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tx }),
+  });
+}
+
 export async function payHouseCut(chainName: string, wallet: string, amount: number) {
   const chain = chainOf(chainName);
   if (!isEvmAddress(wallet)) return { error: "The house wallet is not a 0x address" };

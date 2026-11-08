@@ -14,8 +14,13 @@ function useVaultSrc(src: string) {
     let dead = false;
     let objectUrl = "";
     openVaultFile(src.slice(6)).then((blob) => {
-      objectUrl = URL.createObjectURL(blob);
-      if (!dead) setUrl(objectUrl);
+      const next = URL.createObjectURL(blob);
+      if (dead) {
+        URL.revokeObjectURL(next);
+        return;
+      }
+      objectUrl = next;
+      setUrl(next);
     }).catch(() => {});
     return () => {
       dead = true;

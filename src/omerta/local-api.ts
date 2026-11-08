@@ -93,6 +93,7 @@ type HouseDeposit = {
   wallet: string;
   timestamp: number;
 };
+type Bid = { id: string; bidder: string; amount: number; timestamp: number };
 type Listing = {
   id: string;
   seller: string;
@@ -480,7 +481,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (db.users.some((u) => u.handle.toLowerCase() === handle.toLowerCase())) {
       return json({ error: "Wrong passphrase", code: "bad_passphrase" }, 401);
     }
-    const role = handle.toLowerCase() === "flint" ? "admin" : "basic";
+    const role = "basic";
     const user: User = { id: nid(), handle, passphrase, role, created_at: Math.floor(Date.now() / 1000) };
     db.users.push(user);
     save();
@@ -501,12 +502,12 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "users" && seg[2] === "profile" && method === "GET") {
     const handle = decodeURIComponent(seg[1]);
-    const user = db.users.find((u) => u.handle === handle);
+    const user = db.users.find((u) => u.handle.toLowerCase() === handle.toLowerCase());
     if (!user) return json({ error: "Not found" }, 404);
-    const settings = db.userSettings[handle] || {};
+    const settings = db.userSettings[user.handle] || db.userSettings[handle] || {};
     let avatar = (settings.avatar as string) || null;
     if (!avatar) {
-      const post = [...db.posts].reverse().find((p) => p.author_handle === handle && p.author_avatar);
+      const post = [...db.posts].reverse().find((p) => p.author_handle.toLowerCase() === user.handle.toLowerCase() && p.author_avatar);
       avatar = post?.author_avatar || null;
     }
     return json({ handle: user.handle, created_at: user.created_at, role: user.role || "basic", avatar });
@@ -514,9 +515,9 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
 
   if (seg[0] === "users" && seg[2] === "promote" && method === "POST") {
     const { role, adminHandle } = await readJson(input, init);
-    const admin = db.users.find((u) => u.handle === adminHandle);
+    const admin = db.users.find((u) => u.handle.toLowerCase() === String(adminHandle || "").toLowerCase());
     if (!admin || admin.role !== "admin") return json({ error: "Admin only" }, 403);
-    const user = db.users.find((u) => u.handle === decodeURIComponent(seg[1]));
+    const user = db.users.find((u) => u.handle.toLowerCase() === decodeURIComponent(seg[1]).toLowerCase());
     if (!user) return json({ error: "User not found" }, 404);
     user.role = role;
     save();

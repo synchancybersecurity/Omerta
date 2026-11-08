@@ -91,9 +91,9 @@ interface ApiContextValue {
   fetchSMS: (handle: string) => Promise<void>;
   sendSMS: (sender: string, recipient: string, content: string, burnAfterRead?: boolean) => Promise<void>;
   burnSMS: (messageId: number) => Promise<void>;
-  uploadFile: (file: File) => Promise<{ url: string } | null>;
+  uploadFile: (file: File) => Promise<{ url?: string; error?: string } | null>;
   fetchEscrows: (handle: string) => Promise<void>;
-  createEscrow: (sender: string, recipient: string, amount: number, description: string) => Promise<void>;
+  createEscrow: (sender: string, recipient: string, amount: number, description: string) => Promise<{ id?: string } | null>;
   updateEscrow: (id: string, action: 'release' | 'dispute' | 'cancel') => Promise<void>;
   resolveEscrow: (id: string, resolution: 'released' | 'refunded' | 'disputed', adminHandle: string, note?: string) => Promise<void>;
   fetchAllEscrows: () => Promise<void>;
@@ -330,12 +330,13 @@ export function ApiProvider({ children }: { children: ReactNode }) {
 
   const createEscrow = useCallback(async (sender: string, recipient: string, amount: number, description: string) => {
     try {
-      await fetch(`${API_BASE_URL}/api/escrow`, {
+      const res = await fetch(`${API_BASE_URL}/api/escrow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sender, recipient, amount, description }),
       });
-    } catch { /* silently fail */ }
+      return await res.json();
+    } catch { return null; }
   }, []);
 
   const updateEscrow = useCallback(async (id: string, action: 'release' | 'dispute' | 'cancel') => {
