@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { payHouseCut, recordHouseTx } from "@omerta/chain";
+import { formatBtc, payHouseCut, recordHouseTx } from "@omerta/chain";
 import { VaultImg } from "@omerta/components/Attachment";
 import { useApp } from "@omerta/store/AppContext";
 import { ArrowLeft, Clock, Gavel, Heart, Plus, Search, Store, Tag } from "lucide-react";
@@ -27,7 +27,7 @@ const CATEGORIES = ["All", "Relics", "Coin", "Documents", "Portraits", "Jewelry"
 const DESKS = ["Live", "Ending", "Buy now", "Watching", "Bidding", "Selling"] as const;
 
 function money(value: number) {
-  return "$" + value.toFixed(2);
+  return formatBtc(value);
 }
 
 function highBid(lot: Listing) {
@@ -41,10 +41,10 @@ function priceOf(lot: Listing) {
 }
 
 function stepFor(amount: number) {
-  if (amount < 25) return 1;
-  if (amount < 100) return 2;
-  if (amount < 250) return 5;
-  return 10;
+  if (amount < 0.001) return 0.00001;
+  if (amount < 0.01) return 0.0001;
+  if (amount < 0.1) return 0.001;
+  return 0.01;
 }
 
 function minimumBid(lot: Listing) {
@@ -149,7 +149,7 @@ export default function MrktTab() {
     setBid("");
     setNotice("Bid accepted");
     await load();
-    const fee = Number((amount * 0.03).toFixed(2));
+    const fee = Number((amount * 0.03).toFixed(8));
     const house = await fetch("/api/house/settings").then((response) => response.json()).catch(() => null);
     if (house?.feeWallet && fee > 0) {
       try {
@@ -183,7 +183,7 @@ export default function MrktTab() {
     await load();
     const house = await fetch("/api/house/settings").then((response) => response.json()).catch(() => null);
     if (house?.feeWallet && lot.buy_now) {
-      const fee = Number((lot.buy_now * 0.03).toFixed(2));
+      const fee = Number((lot.buy_now * 0.03).toFixed(8));
       try {
         const result = await payHouseCut(house.feeWallet, fee);
         if (result.tx) {
@@ -343,13 +343,13 @@ export default function MrktTab() {
             <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>{open.status === "sold" ? "Sold for" : open.bids.length ? "Current bid" : "Opening price"}</p>
             <p className="font-serif text-4xl mt-1" style={{ color: "hsl(var(--primary))" }}>{money(priceOf(open))}</p>
             <p className="font-mono text-xs mt-2" style={{ color: "hsl(var(--foreground))" }}>{statusLine(open)} · {open.bids.length} bids{open.winner ? " · " + open.winner : ""}</p>
-            <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>The house keeps 3 percent, paid in bitcoin. A refund does not return it.</p>
+            <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>The house keeps 3 percent in bitcoin. A refund does not return it.</p>
           </div>
           {open.description && <p className="font-mono text-xs leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>{open.description}</p>}
           {open.status === "live" && open.seller.toLowerCase() !== me && (
             <div className="space-y-2">
               <label className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Your bid · minimum {money(minimumBid(open))}</label>
-              <input value={bid} onChange={(e) => setBid(e.target.value)} inputMode="decimal" placeholder={minimumBid(open).toFixed(2)} className="w-full rounded-sm px-3 py-3 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+              <input value={bid} onChange={(e) => setBid(e.target.value)} inputMode="decimal" placeholder={formatBtc(minimumBid(open))} className="w-full rounded-sm px-3 py-3 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }} />
               <button type="button" disabled={busy} onClick={() => placeBid(open)} className="w-full py-3 rounded-sm font-mono text-xs uppercase tracking-wider" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}><Gavel size={14} className="inline mr-2" />Place bid</button>
               {open.buy_now !== null && (
                 <button type="button" disabled={busy} onClick={() => buyNow(open)} className="w-full py-3 rounded-sm font-mono text-xs uppercase tracking-wider border" style={{ borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" }}>Buy now {money(open.buy_now)}</button>
@@ -384,8 +384,8 @@ export default function MrktTab() {
           <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full rounded-sm px-3 py-2 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }}>
             {CATEGORIES.filter((item) => item !== "All").map((item) => <option key={item}>{item}</option>)}
           </select>
-          <Field label="Opening price" value={form.start_price} onChange={(start_price) => setForm({ ...form, start_price })} numeric />
-          <Field label="Buy now, optional" value={form.buy_now} onChange={(buy_now) => setForm({ ...form, buy_now })} numeric />
+          <Field label="Opening price in BTC" value={form.start_price} onChange={(start_price) => setForm({ ...form, start_price })} numeric />
+          <Field label="Buy now in BTC, optional" value={form.buy_now} onChange={(buy_now) => setForm({ ...form, buy_now })} numeric />
           <label className="block font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Duration</label>
           <div className="flex gap-2">
             {["1", "3", "5", "7"].map((days) => (

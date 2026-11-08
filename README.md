@@ -59,17 +59,19 @@ A member can also turn on end to end encryption for a private thread. That optio
 
 ## The market
 
-MRKT is an auction desk. A seller lists a lot with a title, a description, a category, a starting price, and an optional buy now price. A photograph can be attached to the listing. The clock shows how much time is left.
+MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. A photograph can be attached to the listing. The clock shows how much time is left.
 
 Anyone else on the device may bid, buy the lot outright when buy now is offered, or watch it. A bid must beat the current price. A seller cannot bid on their own lot. When the clock ends, the high bid wins. If nobody bids, the lot simply ends.
 
 ## Escrow and the house
 
-Escrow holds an amount between two handles. It can be released, disputed, refunded, or cancelled.
+Escrow holds a bitcoin amount between two handles. It can be released, disputed, refunded, or cancelled.
 
-The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not give that cut back. The rate is fixed. The books still show the fee in dollars. The coins themselves are bitcoin.
+The house keeps 3 percent of every escrow, every bid, and every auction sale. A refund or a cancelled deal does not give that cut back. The rate is fixed. Prices, bids, escrow amounts, and the house books are all in bitcoin.
 
-When a payer approves the transfer, that dollar amount is converted at the current bitcoin price and sent to the house wallet. The payer still has to approve it in their own bitcoin wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed. A cut smaller than the bitcoin dust limit stays on the books until it can be sent.
+When a payer approves the transfer, that bitcoin is sent to the house wallet. The payer still has to approve it in their own bitcoin wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed. A cut smaller than the bitcoin dust limit stays on the books until it can be sent.
+
+Older dollar amounts already on this phone are converted once, at the bitcoin price when the app next opens. After that, everything new is entered in bitcoin.
 
 An administrator can enter one or more bitcoin addresses and export some or all of the bitcoin from the house wallet. Leave the amount blank to export the whole balance. A little bitcoin is kept back to pay the network fee.
 

@@ -1,6 +1,6 @@
 import { isSealed, openVault, sealVault } from "@omerta/vault-aes";
 import { vaultGet, vaultSet, storeVaultFile } from "@omerta/vault-store";
-import { asBitcoinWallet, createHouseWallet, exportHouseBtc, isBtcAddress, restoreHouseWallet } from "@omerta/chain";
+import { asBitcoinWallet, createHouseWallet, exportHouseBtc, isBtcAddress, restoreHouseWallet, spotUsd } from "@omerta/chain";
 
 const KEY = "omerta_db_v1";
 
@@ -70,6 +70,7 @@ type Db = {
   payoutWallets: string[];
   publicKeys: Record<string, string>;
   listings: Listing[];
+  moneyUnit?: "btc";
 };
 
 type ChainPayment = {
@@ -123,7 +124,7 @@ function creditHouse(source: "auction" | "escrow", sourceId: string, gross: numb
   if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
   const existing = db.houseDeposits.find((row) => row.source === source && row.source_id === sourceId);
   if (existing) return existing.amount;
-  const amount = Number((Number(gross) * HOUSE_CUT).toFixed(2));
+  const amount = Math.round(Number(gross) * HOUSE_CUT * 1e8) / 1e8;
   if (!(amount > 0)) return 0;
   const wallet = (db.houseSettings?.feeWallet || "").trim();
   const chain = db.houseSettings?.chain || "base";
@@ -199,7 +200,7 @@ function highBid(lot: Listing) {
 
 function nextBid(lot: Listing) {
   const current = highBid(lot) || lot.start_price;
-  const step = current < 25 ? 1 : current < 100 ? 2 : current < 250 ? 5 : 10;
+  const step = current < 0.001 ? 0.00001 : current < 0.01 ? 0.0001 : current < 0.1 ? 0.001 : 0.01;
   return (lot.bids.length ? current : lot.start_price) + (lot.bids.length ? step : 0);
 }
 
@@ -305,6 +306,40 @@ function emptyDb(): Db {
 }
 
 let seq = 10;
+function sats(value: number) {
+  return Math.round(value * 1e8) / 1e8;
+}
+
+async function convertDollarBooks() {
+  if (db.moneyUnit === "btc") return;
+  const hasMoney = db.listings.length || db.escrows.length || db.houseDeposits.length || db.chainPayments.length;
+  if (!hasMoney) {
+    db.moneyUnit = "btc";
+    return;
+  }
+  const price = await spotUsd().catch(() => 0);
+  if (!(price > 0)) return;
+  const toBtc = (value: unknown) => sats(Number(value) / price);
+  for (const lot of db.listings) {
+    lot.start_price = toBtc(lot.start_price);
+    lot.buy_now = lot.buy_now === null ? null : toBtc(lot.buy_now);
+    lot.sold_price = lot.sold_price === null ? null : toBtc(lot.sold_price);
+    if (lot.house_fee) lot.house_fee = toBtc(lot.house_fee);
+    for (const bid of lot.bids) bid.amount = toBtc(bid.amount);
+  }
+  for (const row of db.escrows) {
+    row.amount = toBtc(row.amount);
+    if (row.house_fee !== undefined) row.house_fee = toBtc(row.house_fee);
+    if (row.net_amount !== undefined) row.net_amount = toBtc(row.net_amount);
+  }
+  for (const row of db.houseDeposits) {
+    row.gross = toBtc(row.gross);
+    row.amount = toBtc(row.amount);
+  }
+  for (const row of db.chainPayments) row.amount = toBtc(row.amount);
+  db.moneyUnit = "btc";
+}
+
 function nid() {
   seq += 1;
   return Date.now() + seq;
@@ -330,7 +365,9 @@ async function loadAsync() {
     const raw = await readBlob();
     if (raw) {
       const json = isSealed(raw) ? await openVault(raw) : raw;
-      db = { ...emptyDb(), ...JSON.parse(json) };
+      const parsed = JSON.parse(json);
+      db = { ...emptyDb(), ...parsed };
+      if (!parsed.moneyUnit) db.moneyUnit = undefined;
       db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3, chain: "bitcoin" };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
       if (!Array.isArray(db.chainPayments)) db.chainPayments = [];
@@ -338,15 +375,20 @@ async function loadAsync() {
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
-      if (!isSealed(raw) || stripped || !hadKey) {
+      const wasDollars = db.moneyUnit !== "btc";
+      await convertDollarBooks();
+      if (!isSealed(raw) || stripped || !hadKey || (wasDollars && db.moneyUnit === "btc")) {
         lastSaved = "";
         save();
       } else {
         lastSaved = JSON.stringify(db);
       }
+    } else {
+      db.moneyUnit = "btc";
     }
   } catch {
     db = emptyDb();
+    db.moneyUnit = "btc";
   }
   loaded = true;
 }
@@ -771,14 +813,14 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       return json({ error: "Enter a recipient and an amount" }, 400);
     }
     const pct = 3;
-    const houseFee = Number((amount * (pct / 100)).toFixed(2));
+    const houseFee = sats(amount * (pct / 100));
     const escrow = {
       id: "e" + nid(),
       sender: body.sender,
       recipient: body.recipient,
       amount,
       house_fee: houseFee,
-      net_amount: Number((amount - houseFee).toFixed(2)),
+      net_amount: sats(amount - houseFee),
       house_fee_percent: pct,
       description: body.description || "",
       status: "pending",
@@ -790,7 +832,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     db.escrows.unshift(escrow);
     escrow.house_fee = creditHouse("escrow", String(escrow.id), amount, String(body.sender || ""));
     escrow.house_fee_percent = 3;
-    escrow.net_amount = Number((amount - Number(escrow.house_fee)).toFixed(2));
+    escrow.net_amount = sats(amount - Number(escrow.house_fee));
     save();
     return json(escrow);
   }
@@ -806,7 +848,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (escrow.status === "released" || escrow.status === "refunded" || escrow.status === "cancelled") {
       escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount), String(escrow.sender || ""));
       escrow.house_fee_percent = 3;
-      escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
+      escrow.net_amount = sats(Number(escrow.amount) - Number(escrow.house_fee));
     }
     save();
     return json(escrow);
@@ -820,7 +862,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (escrow.status === "released" || escrow.status === "cancelled") {
       escrow.house_fee = creditHouse("escrow", String(escrow.id), Number(escrow.amount), String(escrow.sender || ""));
       escrow.house_fee_percent = 3;
-      escrow.net_amount = Number((Number(escrow.amount) - Number(escrow.house_fee)).toFixed(2));
+      escrow.net_amount = sats(Number(escrow.amount) - Number(escrow.house_fee));
     }
     save();
     return json(escrow);
@@ -1087,8 +1129,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       description: String(body.description || "").trim().slice(0, 800),
       category: String(body.category || "Oddities"),
       image: typeof body.image === "string" && (body.image.startsWith("data:image/") || body.image.startsWith("vault:")) ? body.image : null,
-      start_price: Math.round(start * 100) / 100,
-      buy_now: buyNow === null ? null : Math.round(buyNow * 100) / 100,
+      start_price: sats(start),
+      buy_now: buyNow === null ? null : sats(buyNow),
       ends_at: Date.now() + days * 86400000,
       created_at: Date.now(),
       status: "live",
@@ -1113,9 +1155,9 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     if (!bidder) return json({ error: "Sign in first" }, 400);
     if (bidder.toLowerCase() === lot.seller.toLowerCase()) return json({ error: "You cannot bid on your own lot" }, 400);
     const minimum = nextBid(lot);
-    if (!Number.isFinite(amount) || amount < minimum) return json({ error: "Bid at least $" + minimum.toFixed(2) }, 400);
-    lot.bids.push({ id: "bid" + nid(), bidder, amount: Math.round(amount * 100) / 100, timestamp: Date.now() });
-    creditHouse("auction", lot.id + ":" + bidder.toLowerCase() + ":" + String(lot.bids.length), Math.round(amount * 100) / 100, bidder);
+    if (!Number.isFinite(amount) || amount < minimum) return json({ error: "Bid at least " + minimum.toFixed(8) + " BTC" }, 400);
+    lot.bids.push({ id: "bid" + nid(), bidder, amount: sats(amount), timestamp: Date.now() });
+    creditHouse("auction", lot.id + ":" + bidder.toLowerCase() + ":" + String(lot.bids.length), sats(amount), bidder);
     save();
     return json(lot);
   }

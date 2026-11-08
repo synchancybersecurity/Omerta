@@ -6,7 +6,7 @@ import {
   ShieldCheck, UserPlus, UserCog, Wallet, Landmark, Gavel,
   ChevronDown, User, Crown, Search, X
 } from 'lucide-react';
-import { payHouseCut, readHouseBalance } from '@omerta/chain';
+import { formatBtc, payHouseCut, readHouseBalance } from '@omerta/chain';
 import { useApp } from '@omerta/store/AppContext';
 import { useApi, API_BASE_URL } from '@omerta/store/ApiContext';
 
@@ -177,12 +177,12 @@ function HouseEscrowSettings() {
   return (
     <div className="space-y-4 pt-2">
       <p className="font-mono text-[10px] leading-relaxed" style={{ color: "hsl(var(--muted-foreground))" }}>
-        Fees are booked in dollars and collected in bitcoin. Write down the recovery phrase. After a wipe, an admin can enter the same phrase and the bitcoin comes back. An admin can also export it to any bitcoin address entered below. A little bitcoin must remain for the network fee.
+        Fees are collected in bitcoin. Write down the recovery phrase. After a wipe, an admin can enter the same phrase and the bitcoin comes back. An admin can also export it to any bitcoin address entered below. A little bitcoin must remain for the network fee.
       </p>
       <div className="p-3 border rounded-lg" style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}>
         <span className="font-mono text-[9px] uppercase" style={{ color: "hsl(var(--muted-foreground))" }}>House wallet</span>
         <p className="font-mono text-[11px] break-all mt-1" style={{ color: "hsl(var(--foreground))" }}>{houseAddress || "Creating the wallet..."}</p>
-        <p className="font-mono text-lg mt-2" style={{ color: "hsl(var(--primary))" }}>${collected.toFixed(2)} booked</p>
+        <p className="font-mono text-lg mt-2" style={{ color: "hsl(var(--primary))" }}>{formatBtc(collected)} booked</p>
         {balance && <p className="font-mono text-[10px] mt-2 break-all" style={{ color: "hsl(var(--foreground))" }}>{balance}</p>}
       </div>
       <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "hsl(var(--muted-foreground))" }}>Bitcoin</p>
@@ -250,14 +250,14 @@ function HouseEscrowSettings() {
       ))}
       {pending.map((row) => (
         <div key={row.id} className="flex items-center justify-between gap-2 font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
-          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · ${row.amount.toFixed(2)} in BTC</span>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {formatBtc(row.amount)}</span>
           <button type="button" onClick={() => void sendCut(row)} className="px-2 py-1 uppercase" style={{ color: "hsl(var(--primary))" }}>Send</button>
         </div>
       ))}
       {(houseSettings.deposits || []).slice(0, 8).map((row) => (
         <div key={row.id} className="flex items-center justify-between font-mono text-[10px] border-b py-2" style={{ borderColor: "hsl(var(--border))" }}>
-          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · ${Number(row.gross).toFixed(2)}</span>
-          <span style={{ color: "hsl(var(--primary))" }}>${Number(row.amount).toFixed(2)}</span>
+          <span style={{ color: "hsl(var(--muted-foreground))" }}>{row.source === "auction" ? "Auction" : "Escrow"} · {formatBtc(Number(row.gross))}</span>
+          <span style={{ color: "hsl(var(--primary))" }}>{formatBtc(Number(row.amount))}</span>
         </div>
       ))}
     </div>
@@ -290,11 +290,11 @@ function AdminEscrowOversight() {
       <div className="grid grid-cols-4 gap-2">
         <div className="p-2 border rounded-lg text-center" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
           <span className="font-mono text-[9px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Volume</span>
-          <p className="font-mono text-sm" style={{ color: 'hsl(var(--foreground))' }}>${totalVolume.toFixed(2)}</p>
+          <p className="font-mono text-sm" style={{ color: 'hsl(var(--foreground))' }}>{formatBtc(totalVolume)}</p>
         </div>
         <div className="p-2 border rounded-lg text-center" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
           <span className="font-mono text-[9px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Fees</span>
-          <p className="font-mono text-sm" style={{ color: 'hsl(var(--primary))' }}>${totalFees.toFixed(2)}</p>
+          <p className="font-mono text-sm" style={{ color: 'hsl(var(--primary))' }}>{formatBtc(totalFees)}</p>
         </div>
         <div className="p-2 border rounded-lg text-center" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
           <span className="font-mono text-[9px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Pending</span>
@@ -352,7 +352,7 @@ function AdminEscrowOversight() {
                 <span className="font-mono text-xs uppercase tracking-wider" style={{ color: sc.text }}>{escrow.status}</span>
                 <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{escrow.id}</p>
               </div>
-              <span className="font-mono text-lg font-bold" style={{ color: 'hsl(var(--foreground))' }}>${escrow.amount.toFixed(2)}</span>
+              <span className="font-mono text-lg font-bold" style={{ color: 'hsl(var(--foreground))' }}>{formatBtc(escrow.amount)}</span>
             </div>
             <div className="flex items-center gap-2 mb-1 font-mono text-[11px]">
               <span style={{ color: 'hsl(var(--foreground))' }}>{escrow.sender}</span>
@@ -363,8 +363,8 @@ function AdminEscrowOversight() {
               <p className="font-mono text-[10px] mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>{escrow.description}</p>
             )}
             <div className="flex justify-between font-mono text-[9px] mb-2">
-              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Fee ({escrow.house_fee_percent}%): <span style={{ color: 'hsl(var(--primary))' }}>${(escrow.house_fee || 0).toFixed(2)}</span></span>
-              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Net: <span style={{ color: 'hsl(142, 76%, 36%)' }}>${(escrow.net_amount || escrow.amount).toFixed(2)}</span></span>
+              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Fee ({escrow.house_fee_percent}%): <span style={{ color: 'hsl(var(--primary))' }}>{formatBtc(escrow.house_fee || 0)}</span></span>
+              <span style={{ color: 'hsl(var(--muted-foreground))' }}>Net: <span style={{ color: 'hsl(142, 76%, 36%)' }}>{formatBtc(escrow.net_amount || escrow.amount)}</span></span>
             </div>
 
             {(escrow.status === 'pending' || escrow.status === 'disputed') && (

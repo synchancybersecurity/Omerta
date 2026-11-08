@@ -61,6 +61,13 @@ export function asBitcoinWallet(wallet: { address: string; key: string; phrase?:
   return createHouseWallet();
 }
 
+export function formatBtc(value: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0 BTC";
+  const text = n.toFixed(8).replace(/\.?0+$/, "");
+  return (text || "0") + " BTC";
+}
+
 async function btcPrice() {
   const res = await fetch(MEMPOOL + "/v1/prices");
   if (!res.ok) throw new Error("The bitcoin price did not load");
@@ -68,6 +75,10 @@ async function btcPrice() {
   const usd = Number(data.USD);
   if (!(usd > 0)) throw new Error("The bitcoin price did not load");
   return usd;
+}
+
+export async function spotUsd() {
+  return btcPrice();
 }
 
 export async function readHouseBalance(address: string) {
@@ -80,20 +91,13 @@ export async function readHouseBalance(address: string) {
   return { chain: "Bitcoin", btc: (confirmed + pending) / 1e8 };
 }
 
-export async function payHouseCut(address: string, usd: number): Promise<{ tx?: string; opened?: boolean; error?: string; btc?: number }> {
+export async function payHouseCut(address: string, btc: number): Promise<{ tx?: string; opened?: boolean; error?: string; btc?: number }> {
   if (!isBtcAddress(address)) return { error: "The house wallet is not a bitcoin address" };
-  if (!(usd > 0)) return { error: "Nothing to send" };
-  try {
-    const price = await btcPrice();
-    const btc = usd / price;
-    const sats = Math.round(btc * 1e8);
-    if (sats < 546) return { error: "That cut is below the bitcoin dust limit. It stays on the books." };
-    const amount = (sats / 1e8).toFixed(8);
-    window.location.href = `bitcoin:${address}?amount=${amount}`;
-    return { opened: true, btc: sats / 1e8 };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "The bitcoin price could not be read" };
-  }
+  if (!(btc > 0)) return { error: "Nothing to send" };
+  const sats = Math.round(btc * 1e8);
+  if (sats < 546) return { error: "That cut is below the bitcoin dust limit. It stays on the books." };
+  window.location.href = `bitcoin:${address}?amount=${(sats / 1e8).toFixed(8)}`;
+  return { opened: true, btc: sats / 1e8 };
 }
 
 type Utxo = { txid: string; vout: number; value: number; status?: { confirmed?: boolean } };
