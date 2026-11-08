@@ -34,7 +34,7 @@ The interface is a single dark room with a bottom bar. Each section stays availa
 | Message | Private conversations between two handles. |
 | Contacts | Search for a handle and start a private thread. |
 | Escrow | Hold an amount between two handles until it is released, disputed, or cancelled. |
-| MRKT | Reserved for a later auction desk. It is not open yet. |
+| MRKT | An auction desk. List a lot, bid, buy now, or watch it until the clock ends. |
 | Settings | Display, notification, and account preferences for this device. |
 
 ## Chat rooms

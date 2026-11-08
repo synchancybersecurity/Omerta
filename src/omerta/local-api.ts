@@ -63,9 +63,60 @@ type Db = {
   roomClearedAt: number;
   houseSettings: { holdingWallet: string; feeWallet: string; houseFeePercent: number };
   publicKeys: Record<string, string>;
+  listings: Listing[];
+};
+
+type Bid = { id: string; bidder: string; amount: number; timestamp: number };
+type Listing = {
+  id: string;
+  seller: string;
+  title: string;
+  description: string;
+  category: string;
+  image: string | null;
+  start_price: number;
+  buy_now: number | null;
+  ends_at: number;
+  created_at: number;
+  status: "live" | "sold" | "ended" | "cancelled";
+  winner: string | null;
+  sold_price: number | null;
+  bids: Bid[];
+  watchers: string[];
 };
 
 const ROOM_CLEAR_MS = 48 * 60 * 60 * 1000;
+
+function highBid(lot: Listing) {
+  return lot.bids.reduce((top, bid) => (bid.amount > top ? bid.amount : top), 0);
+}
+
+function nextBid(lot: Listing) {
+  const current = highBid(lot) || lot.start_price;
+  const step = current < 25 ? 1 : current < 100 ? 2 : current < 250 ? 5 : 10;
+  return (lot.bids.length ? current : lot.start_price) + (lot.bids.length ? step : 0);
+}
+
+function settleLot(lot: Listing) {
+  if (lot.status !== "live" || Date.now() < lot.ends_at) return false;
+  const top = [...lot.bids].sort((a, b) => b.amount - a.amount || a.timestamp - b.timestamp)[0];
+  if (top) {
+    lot.status = "sold";
+    lot.winner = top.bidder;
+    lot.sold_price = top.amount;
+  } else {
+    lot.status = "ended";
+    lot.winner = null;
+    lot.sold_price = null;
+  }
+  return true;
+}
+
+function touchMarket() {
+  if (!Array.isArray(db.listings)) db.listings = [];
+  const changed = db.listings.some((lot) => settleLot(lot));
+  if (changed) save();
+}
 
 function emptyDb(): Db {
   const now = Date.now();
@@ -145,6 +196,62 @@ function emptyDb(): Db {
     roomClearedAt: now,
     houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 2.25 },
     publicKeys: {},
+    listings: [
+      {
+        id: "lot-coin",
+        seller: "ghost",
+        title: "Cracked house coin, bone on black",
+        description: "A theatrical coin with a cracked mask. One lot. Sold as shown.",
+        category: "Coin",
+        image: null,
+        start_price: 40,
+        buy_now: 125,
+        ends_at: now + 2 * 86400000,
+        created_at: now - 86400000,
+        status: "live",
+        winner: null,
+        sold_price: null,
+        bids: [{ id: "bid-coin-1", bidder: "vesper", amount: 46, timestamp: now - 3600000 }],
+        watchers: [],
+      },
+      {
+        id: "lot-letter",
+        seller: "vesper",
+        title: "Sealed letter, wax unbroken",
+        description: "A short letter under black wax. The seal has not been opened.",
+        category: "Documents",
+        image: null,
+        start_price: 15,
+        buy_now: null,
+        ends_at: now + 5 * 3600000,
+        created_at: now - 7200000,
+        status: "live",
+        winner: null,
+        sold_price: null,
+        bids: [],
+        watchers: ["ghost"],
+      },
+      {
+        id: "lot-ring",
+        seller: "ghost",
+        title: "Thin gold band, no stone",
+        description: "A plain band. Light wear. No inscription.",
+        category: "Jewelry",
+        image: null,
+        start_price: 80,
+        buy_now: 220,
+        ends_at: now + 4 * 86400000,
+        created_at: now - 18000000,
+        status: "live",
+        winner: null,
+        sold_price: null,
+        bids: [
+          { id: "bid-ring-1", bidder: "vesper", amount: 80, timestamp: now - 9000000 },
+          { id: "bid-ring-2", bidder: "vesper", amount: 90, timestamp: now - 4000000 },
+        ],
+        watchers: [],
+      },
+    ],
   };
 }
 
@@ -787,6 +894,110 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       stdout: "Shell execution is disabled in this preview.\n",
       error: null,
     });
+  }
+
+  if (seg[0] === "market" && seg.length === 1 && method === "GET") {
+    touchMarket();
+    return json(db.listings);
+  }
+
+  if (seg[0] === "market" && seg.length === 1 && method === "POST") {
+    touchMarket();
+    const body = await readJson(input, init);
+    const title = String(body.title || "").trim();
+    const seller = String(body.seller || "").trim();
+    const start = Number(body.start_price);
+    const days = Number(body.days);
+    if (!seller || title.length < 3) return json({ error: "A title is required" }, 400);
+    if (!Number.isFinite(start) || start <= 0) return json({ error: "Set a starting price" }, 400);
+    if (![1, 3, 5, 7].includes(days)) return json({ error: "Choose a duration" }, 400);
+    const buyNow = body.buy_now === null || body.buy_now === "" || body.buy_now === undefined ? null : Number(body.buy_now);
+    if (buyNow !== null && (!Number.isFinite(buyNow) || buyNow <= start)) {
+      return json({ error: "Buy now must be higher than the opening price" }, 400);
+    }
+    const lot: Listing = {
+      id: "lot" + nid(),
+      seller,
+      title: title.slice(0, 80),
+      description: String(body.description || "").trim().slice(0, 800),
+      category: String(body.category || "Oddities"),
+      image: typeof body.image === "string" && body.image.startsWith("data:image/") ? body.image : null,
+      start_price: Math.round(start * 100) / 100,
+      buy_now: buyNow === null ? null : Math.round(buyNow * 100) / 100,
+      ends_at: Date.now() + days * 86400000,
+      created_at: Date.now(),
+      status: "live",
+      winner: null,
+      sold_price: null,
+      bids: [],
+      watchers: [],
+    };
+    db.listings.unshift(lot);
+    save();
+    return json(lot);
+  }
+
+  if (seg[0] === "market" && seg[2] === "bid" && method === "POST") {
+    touchMarket();
+    const lot = db.listings.find((item) => item.id === seg[1]);
+    if (!lot) return json({ error: "Lot not found" }, 404);
+    if (lot.status !== "live") return json({ error: "This auction has closed" }, 400);
+    const body = await readJson(input, init);
+    const bidder = String(body.bidder || "").trim();
+    const amount = Number(body.amount);
+    if (!bidder) return json({ error: "Sign in first" }, 400);
+    if (bidder.toLowerCase() === lot.seller.toLowerCase()) return json({ error: "You cannot bid on your own lot" }, 400);
+    const minimum = nextBid(lot);
+    if (!Number.isFinite(amount) || amount < minimum) return json({ error: "Bid at least $" + minimum.toFixed(2) }, 400);
+    lot.bids.push({ id: "bid" + nid(), bidder, amount: Math.round(amount * 100) / 100, timestamp: Date.now() });
+    save();
+    return json(lot);
+  }
+
+  if (seg[0] === "market" && seg[2] === "buy" && method === "POST") {
+    touchMarket();
+    const lot = db.listings.find((item) => item.id === seg[1]);
+    if (!lot || lot.buy_now === null) return json({ error: "Buy now is not offered" }, 400);
+    if (lot.status !== "live") return json({ error: "This auction has closed" }, 400);
+    const body = await readJson(input, init);
+    const bidder = String(body.bidder || "").trim();
+    if (!bidder) return json({ error: "Sign in first" }, 400);
+    if (bidder.toLowerCase() === lot.seller.toLowerCase()) return json({ error: "You cannot buy your own lot" }, 400);
+    lot.bids.push({ id: "bid" + nid(), bidder, amount: lot.buy_now, timestamp: Date.now() });
+    lot.status = "sold";
+    lot.winner = bidder;
+    lot.sold_price = lot.buy_now;
+    lot.ends_at = Date.now();
+    save();
+    return json(lot);
+  }
+
+  if (seg[0] === "market" && seg[2] === "watch" && method === "POST") {
+    touchMarket();
+    const lot = db.listings.find((item) => item.id === seg[1]);
+    if (!lot) return json({ error: "Lot not found" }, 404);
+    const body = await readJson(input, init);
+    const handle = String(body.handle || "").trim();
+    if (!handle) return json({ error: "Sign in first" }, 400);
+    const key = handle.toLowerCase();
+    const has = lot.watchers.some((name) => name.toLowerCase() === key);
+    lot.watchers = has ? lot.watchers.filter((name) => name.toLowerCase() !== key) : [...lot.watchers, handle];
+    save();
+    return json(lot);
+  }
+
+  if (seg[0] === "market" && seg[2] === "cancel" && method === "POST") {
+    touchMarket();
+    const lot = db.listings.find((item) => item.id === seg[1]);
+    if (!lot) return json({ error: "Lot not found" }, 404);
+    const body = await readJson(input, init);
+    const seller = String(body.seller || "").trim();
+    if (seller.toLowerCase() !== lot.seller.toLowerCase()) return json({ error: "Only the seller can end this" }, 403);
+    if (lot.status !== "live") return json({ error: "This auction has closed" }, 400);
+    if (lot.bids.length) return json({ error: "Bids are already in. Let it finish." }, 400);
+    lot.status = "cancelled";
+    save();
+    return json(lot);
   }
 
   return json({ error: "Not found" }, 404);
