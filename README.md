@@ -18,7 +18,7 @@
 
 # Omertà
 
-Omertà is a private room for people who would rather speak in handles than in real names. You open it in the browser, you keep a passphrase, and the messages stay on that phone or computer. Nobody else is sitting on a server reading the room.
+Omertà is a private room for people who would rather speak in handles than in real names. You open it in the browser, you keep a passphrase, and the messages stay on that phone or computer. The vault on the device is sealed with AES. Nobody else is sitting on a server reading the room.
 
 The live app is here: [synchancybersecurity.github.io/Omerta](https://synchancybersecurity.github.io/Omerta/)
 
@@ -26,7 +26,11 @@ The live app is here: [synchancybersecurity.github.io/Omerta](https://synchancyb
 
 You pick a handle and a passphrase. If that pair is new, the vault makes the account. If you have used it on this device before, the same pair lets you back in.
 
-Inside, you get a profile, a news feed, private chat, a message box, contacts, a small escrow desk, and settings. Posts can be plain, burned after reading, or wrapped in the emoji cipher. The coin on the login screen is the mark of the house.
+Inside, you get a profile, a news feed, private chat, a message box, contacts, a small escrow desk, and settings. New messages show up while you stay on the tab. You do not have to leave and come back.
+
+The Lounge is open to every handle. You can also make your own room, and you can lock it with a passphrase so only the people who know it can walk in. The person who made the room can always return. Every room, locked or not, clears itself every 48 hours. Private messages are left alone.
+
+Posts can be plain, burned after reading, or wrapped in the emoji cipher. The coin on the login screen is the mark of the house.
 
 ## Put it on your phone
 
@@ -44,7 +48,7 @@ Type the handle and the passphrase you used the first time on that device. Capit
 
 If the passphrase does not match what this phone saved, the screen says so. It will not pretend you are trying to create a second account.
 
-This copy of the vault lives in the browser. It is not the old machine in the back room. A passphrase that only ever lived on that machine will not open the phone.
+This copy of the vault lives in the browser. It is not the old machine in the back room. A passphrase that only ever lived on that machine will not open the phone. Two different phones do not share one room.
 
 ## Run it yourself
 
@@ -63,4 +67,4 @@ npm run build:pages
 
 ## The old server
 
-The original Express program is kept in the `original` folder, including the database layer, Docker, and the Termux notes. GitHub Pages cannot keep that process running. It only serves the browser app. If you start the old server yourself, do it on a machine you control, and do not leave a shell open to the internet.
+The original Express program is kept in the `original` folder, including the database layer, Docker, and the Termux notes. That database is sealed with AES as well. The key stays on the machine that runs it, not in this repository. GitHub Pages cannot keep that process running. It only serves the browser app. If you start the old server yourself, do it on a machine you control, and do not leave a shell open to the internet.
