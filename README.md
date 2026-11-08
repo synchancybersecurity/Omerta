@@ -47,6 +47,8 @@ The interface is one dark room with a bottom bar. Sections stay available withou
 
 The Lounge is open to every handle. Any member may create another room and name it. A room may be left open, or locked with its own passphrase. An open room is part of the public board. A locked room can be seen by name on other phones. Its messages are sealed with the room passphrase before they are stored. The creator can open them again. Everyone else must enter the passphrase. A locked room does not hide the room name. It only keeps the conversation behind the passphrase.
 
+There is no stock room. Deleting a room removes it, and the shared board does not put it back.
+
 All chat rooms, including locked rooms and the Lounge, are cleared every 48 hours. The room names remain. The messages do not. Private conversations, posts, and market lots are not part of that clear.
 
 Inside a room you can reply to a message, attach a picture or a file, or wrap the text in the emoji cipher before it is sent. The cipher is a disguise for the text. It is separate from the AES seal on the stored vault.

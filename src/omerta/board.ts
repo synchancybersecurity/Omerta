@@ -13,6 +13,7 @@ export type PublicBoard = {
   lots: Array<Record<string, unknown>>;
   captures?: Array<Record<string, unknown>>;
   wipes?: Array<{ handle?: string; at?: number }>;
+  removedRooms?: string[];
 };
 
 type NostrEvent = {

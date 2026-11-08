@@ -102,6 +102,7 @@ type Db = {
   policy: Policy;
   interceptLog: Array<{ t: number; handle: string; kind: string; bytes: number }>;
   reports: Array<{ id: string; reporter: string; target: string; kind: string; reason: string; ref: string; status: string; timestamp: number }>;
+  removedRooms: string[];
 };
 
 type ChainPayment = {
@@ -260,7 +261,15 @@ function stripDemo() {
   if (Array.isArray(db.houseDeposits)) {
     db.houseDeposits = db.houseDeposits.filter((row) => !(row.source === "auction" && demoLots.has(row.source_id)));
   }
-  return db.posts.length !== posts || db.listings.length !== lots;
+  if (!Array.isArray(db.removedRooms)) db.removedRooms = [];
+  const stock = db.chatRooms.some((room) => room.id === "room-seed");
+  const unmarked = !db.removedRooms.includes("room-seed");
+  if (stock || unmarked) {
+    db.chatRooms = db.chatRooms.filter((room) => room.id !== "room-seed");
+    db.roomMessages = db.roomMessages.filter((msg) => msg.room_id !== "room-seed");
+    if (unmarked) db.removedRooms.push("room-seed");
+  }
+  return db.posts.length !== posts || db.listings.length !== lots || stock || unmarked;
 }
 
 function touchMarket() {
@@ -323,33 +332,8 @@ function emptyDb(): Db {
       ghost: { avatar: "/avatars/zodiac-scorpio.jpg" },
     },
     escrows: [],
-    chatRooms: [
-      {
-        id: "room-seed",
-        name: "The Back Room",
-        creator_handle: "ghost",
-        creator_role: "moderator",
-        is_locked: 0,
-        password: null,
-        locked_by: null,
-        lock_reason: null,
-        created_at: now - 30000,
-      },
-    ],
-    roomMessages: [
-      {
-        id: now - 4000,
-        room_id: "room-seed",
-        sender_handle: "ghost",
-        content: "Back room is clear.",
-        timestamp: now - 20000,
-        emoji_encrypted: 0,
-        e2e_encrypted: 0,
-        reply_to: null,
-        reply_content: null,
-        reply_sender: null,
-      },
-    ],
+    chatRooms: [],
+    roomMessages: [],
     roomClearedAt: now,
     houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3, chain: "bitcoin" },
     houseDeposits: [],
@@ -364,6 +348,7 @@ function emptyDb(): Db {
     policy: defaultPolicy(),
     interceptLog: [],
     reports: [],
+    removedRooms: ["room-seed"],
   };
 }
 
@@ -530,6 +515,7 @@ async function loadAsync() {
       db.policy = { ...defaultPolicy(), ...(db.policy || {}) };
       if (!Array.isArray(db.interceptLog)) db.interceptLog = [];
       if (!Array.isArray(db.reports)) db.reports = [];
+      if (!Array.isArray(db.removedRooms)) db.removedRooms = [];
       const hadKey = Boolean(db.houseWallet?.key);
       ensureHouseWallet();
       const stripped = stripDemo();
@@ -555,16 +541,18 @@ async function loadAsync() {
 }
 
 function publicSnapshot(): PublicBoard {
-  const unlocked = new Set(db.chatRooms.filter((room) => !room.is_locked).map((room) => room.id));
+  const gone = new Set(db.removedRooms || []);
+  const unlocked = new Set(db.chatRooms.filter((room) => !room.is_locked && !gone.has(room.id)).map((room) => room.id));
   const light = (value: unknown) => (typeof value === "string" && (value.startsWith("data:") || value.length > 400) ? null : value);
   return {
     posts: db.posts.filter((post) => !post.is_burned).slice(0, 40).map((post) => ({ ...post, author_avatar: light(post.author_avatar) as string | null })),
     chat: db.openChatMessages.filter((msg) => Number(msg.timestamp) >= (db.roomClearedAt || 0)).slice(-80),
-    rooms: db.chatRooms.map(({ password: _password, ...room }) => room),
+    rooms: db.chatRooms.filter((room) => !gone.has(room.id)).map(({ password: _password, ...room }) => room),
     roomMessages: db.roomMessages.filter((msg) => unlocked.has(String(msg.room_id)) && Number(msg.timestamp) >= (db.roomClearedAt || 0)).slice(-80),
     lots: db.listings.slice(0, 40).map((lot) => ({ ...lot, image: light(lot.image) as string | null })),
     captures: (db.captures || []).slice(-40),
     wipes: db.wipes || [],
+    removedRooms: db.removedRooms || [],
   };
 }
 
@@ -592,8 +580,21 @@ function mergeBoard(remote: PublicBoard) {
     if (Number(msg.timestamp) < (db.roomClearedAt || 0) || wiped(msg.sender_handle, msg.timestamp)) continue;
     add(db.openChatMessages, msg);
   }
+  for (const id of remote.removedRooms || []) {
+    const roomId = String(id || "");
+    if (!roomId) continue;
+    if (!db.removedRooms.includes(roomId)) {
+      db.removedRooms.push(roomId);
+      changed = true;
+    }
+    if (db.chatRooms.some((room) => room.id === roomId) || db.roomMessages.some((msg) => msg.room_id === roomId)) {
+      db.chatRooms = db.chatRooms.filter((room) => room.id !== roomId);
+      db.roomMessages = db.roomMessages.filter((msg) => msg.room_id !== roomId);
+      changed = true;
+    }
+  }
   for (const room of remote.rooms || []) {
-    if (!room.id || wiped(room.creator_handle, room.created_at) || db.chatRooms.some((item) => item.id === String(room.id))) continue;
+    if (!room.id || db.removedRooms.includes(String(room.id)) || wiped(room.creator_handle, room.created_at) || db.chatRooms.some((item) => item.id === String(room.id))) continue;
     const { password: _password, ...rest } = room as Room;
     db.chatRooms.push({ ...rest, password: null });
     changed = true;
@@ -1696,8 +1697,11 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   }
 
   if (seg[0] === "chat-rooms" && seg.length === 2 && method === "DELETE") {
-    db.chatRooms = db.chatRooms.filter((r) => r.id !== seg[1]);
-    db.roomMessages = db.roomMessages.filter((m) => m.room_id !== seg[1]);
+    const id = seg[1];
+    db.chatRooms = db.chatRooms.filter((r) => r.id !== id);
+    db.roomMessages = db.roomMessages.filter((m) => m.room_id !== id);
+    if (!Array.isArray(db.removedRooms)) db.removedRooms = [];
+    if (!db.removedRooms.includes(id)) db.removedRooms.push(id);
     save();
     return json({ success: true });
   }
