@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-noir-950: #0a0a0a;
+  --color-noir-900: #0f0f0f;
+  --color-noir-800: #141414;
+  --color-noir-700: #1a1a1a;
+  --color-noir-600: #222222;
+  --color-noir-500: #2a2a2a;
+  --color-noir-400: #3a3a3a;
+  --color-noir-300: #6b6b6b;
+  --color-noir-200: #a1a1a1;
+  --color-noir-100: #f0f0f0;
+
+  --color-blood: #b91c1c;
+  --color-blood-dark: #7f1d1d;
+  --color-blood-light: #dc2626;
+  --color-crimson: #991b1b;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-primary: hsl(var(--primary));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-destructive: hsl(var(--destructive));
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 94%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 94%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 94%;
+    --primary: 0 84% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 94%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 0 84% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 35%;
+    --destructive-foreground: 0 0% 94%;
+    --border: 0 0% 16%;
+    --input: 0 0% 13%;
+    --ring: 0 84% 42%;
+    --radius: 0.625rem;
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 94%;
+    --sidebar-primary: 0 84% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 11%;
+    --sidebar-accent-foreground: 0 0% 94%;
+    --sidebar-border: 0 0% 13%;
+    --sidebar-ring: 0 84% 42%;
+    --bubble-text: 0 0% 94%;
+    --bubble-meta: 0 0% 55%;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: #0a0a0a;
+    color: hsl(var(--foreground));
+    font-family: Inter, sans-serif;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Cormorant Garamond", serif;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.3);
+    border-radius: 2px;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    border: 2px solid hsl(var(--foreground));
+    cursor: pointer;
+  }
+}
