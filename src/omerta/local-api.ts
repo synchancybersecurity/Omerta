@@ -151,6 +151,18 @@ function settleLot(lot: Listing) {
   return true;
 }
 
+function stripDemo() {
+  const demoLots = new Set(["lot-coin", "lot-letter", "lot-ring"]);
+  const posts = db.posts.length;
+  const lots = (db.listings || []).length;
+  db.posts = db.posts.filter((post) => post.id !== "p-seed");
+  db.listings = (db.listings || []).filter((lot) => !demoLots.has(lot.id));
+  if (Array.isArray(db.houseDeposits)) {
+    db.houseDeposits = db.houseDeposits.filter((row) => !(row.source === "auction" && demoLots.has(row.source_id)));
+  }
+  return db.posts.length !== posts || db.listings.length !== lots;
+}
+
 function touchMarket() {
   if (!Array.isArray(db.listings)) db.listings = [];
   const changed = db.listings.some((lot) => settleLot(lot));
@@ -179,26 +191,7 @@ function emptyDb(): Db {
         reply_sender: null,
       },
     ],
-    posts: [
-      {
-        id: "p-seed",
-        author: "Vesper",
-        author_handle: "vesper",
-        author_avatar: "/avatars/tarot-tower.jpg",
-        content: "Coin is up. Speak, or keep the silence.",
-        emoji_encrypted: 0,
-        timestamp: now - 120000,
-        likes: 1,
-        dislikes: 0,
-        comments: 0,
-        shares: 0,
-        is_burned: 0,
-        burn_after: 0,
-        replies: [],
-        liked_by: ["ghost"],
-        disliked_by: [],
-      },
-    ],
+    posts: [],
     smsMessages: [],
     userSettings: {
       vesper: { avatar: "/avatars/tarot-tower.jpg" },
@@ -236,62 +229,7 @@ function emptyDb(): Db {
     houseSettings: { holdingWallet: "", feeWallet: "", houseFeePercent: 3 },
     houseDeposits: [],
     publicKeys: {},
-    listings: [
-      {
-        id: "lot-coin",
-        seller: "ghost",
-        title: "Cracked house coin, bone on black",
-        description: "A theatrical coin with a cracked mask. One lot. Sold as shown.",
-        category: "Coin",
-        image: null,
-        start_price: 40,
-        buy_now: 125,
-        ends_at: now + 2 * 86400000,
-        created_at: now - 86400000,
-        status: "live",
-        winner: null,
-        sold_price: null,
-        bids: [{ id: "bid-coin-1", bidder: "vesper", amount: 46, timestamp: now - 3600000 }],
-        watchers: [],
-      },
-      {
-        id: "lot-letter",
-        seller: "vesper",
-        title: "Sealed letter, wax unbroken",
-        description: "A short letter under black wax. The seal has not been opened.",
-        category: "Documents",
-        image: null,
-        start_price: 15,
-        buy_now: null,
-        ends_at: now + 5 * 3600000,
-        created_at: now - 7200000,
-        status: "live",
-        winner: null,
-        sold_price: null,
-        bids: [],
-        watchers: ["ghost"],
-      },
-      {
-        id: "lot-ring",
-        seller: "ghost",
-        title: "Thin gold band, no stone",
-        description: "A plain band. Light wear. No inscription.",
-        category: "Jewelry",
-        image: null,
-        start_price: 80,
-        buy_now: 220,
-        ends_at: now + 4 * 86400000,
-        created_at: now - 18000000,
-        status: "live",
-        winner: null,
-        sold_price: null,
-        bids: [
-          { id: "bid-ring-1", bidder: "vesper", amount: 80, timestamp: now - 9000000 },
-          { id: "bid-ring-2", bidder: "vesper", amount: 90, timestamp: now - 4000000 },
-        ],
-        watchers: [],
-      },
-    ],
+    listings: [],
   };
 }
 
@@ -324,7 +262,8 @@ async function loadAsync() {
       db = { ...emptyDb(), ...JSON.parse(json) };
       db.houseSettings = { ...emptyDb().houseSettings, ...db.houseSettings, houseFeePercent: 3 };
       if (!Array.isArray(db.houseDeposits)) db.houseDeposits = [];
-      if (!isSealed(raw)) {
+      const stripped = stripDemo();
+      if (!isSealed(raw) || stripped) {
         lastSaved = "";
         save();
       } else {
