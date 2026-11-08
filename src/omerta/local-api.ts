@@ -520,20 +520,27 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   }
 
   if (seg[0] === "chat-rooms" && seg.length === 1 && method === "GET") {
-    return json([...db.chatRooms].sort((a, b) => b.created_at - a.created_at));
+    return json(
+      [...db.chatRooms]
+        .sort((a, b) => b.created_at - a.created_at)
+        .map(({ password: _password, ...room }) => room),
+    );
   }
 
   if (seg[0] === "chat-rooms" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
+    const locked = Boolean(body.isLocked);
+    const password = locked ? String(body.password || "").trim() : null;
+    if (locked && !password) return json({ error: "A locked room needs a passphrase" }, 400);
     const room: Room = {
       id: "room-" + nid(),
       name: body.name || "Untitled Room",
       creator_handle: body.creatorHandle,
       creator_role: body.role || "basic",
-      is_locked: 0,
-      password: null,
-      locked_by: null,
-      lock_reason: null,
+      is_locked: locked ? 1 : 0,
+      password,
+      locked_by: locked ? body.creatorHandle : null,
+      lock_reason: locked ? "Passphrase" : null,
       created_at: Date.now(),
     };
     db.chatRooms.unshift(room);
@@ -542,8 +549,12 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   }
 
   if (seg[0] === "chat-rooms" && seg[2] === "verify" && method === "POST") {
+    const body = await readJson(input, init);
     const room = db.chatRooms.find((r) => r.id === seg[1]);
-    return json({ valid: Boolean(room) });
+    if (!room) return json({ valid: false });
+    if (!room.is_locked) return json({ valid: true });
+    if (!room.password) return json({ valid: false });
+    return json({ valid: room.password === String(body.password || "") });
   }
 
   if (seg[0] === "chat-rooms" && seg[2] === "lock" && method === "POST") {

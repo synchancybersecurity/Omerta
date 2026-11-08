@@ -176,7 +176,8 @@ export default function ChatTab() {
 
   const handleCreateRoom = async () => {
     if (!roomName.trim()) { showToast("// NAME REQUIRED //"); return; }
-    const result = await createChatRoom(roomName.trim(), userHandle, userRole, false, null);
+    if (roomLocked && !roomPassword.trim()) { showToast("// PASSPHRASE REQUIRED //"); return; }
+    const result = await createChatRoom(roomName.trim(), userHandle, userRole, roomLocked, roomLocked ? roomPassword.trim() : null);
     if (result && 'id' in result) {
       setShowCreateRoom(false);
       setRoomName('');
@@ -192,7 +193,12 @@ export default function ChatTab() {
     }
   };
 
-  const handleJoinRoom = (roomId: string) => {
+  const handleJoinRoom = (roomId: string, isLocked: boolean) => {
+    const room = chatRooms.find((r) => r.id === roomId);
+    if (isLocked && room?.creator_handle !== userHandle) {
+      setPasswordRoom(roomId);
+      return;
+    }
     setActiveRoomId(roomId);
     setShowRoomList(false);
   };
@@ -296,7 +302,7 @@ export default function ChatTab() {
             return (
               <div key={room.id} className="flex items-center gap-2">
                 <button
-                  onClick={() => handleJoinRoom(room.id)}
+                  onClick={() => handleJoinRoom(room.id, room.is_locked === 1)}
                   className="flex-1 flex items-center gap-3 p-3 border rounded-lg text-left transition-all hover:brightness-110"
                   style={{ borderColor: isOwn ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--border))', background: 'hsl(var(--card))' }}
                 >
@@ -361,7 +367,7 @@ export default function ChatTab() {
                 <h3 className="font-mono text-sm uppercase tracking-wider" style={{ color: 'hsl(var(--primary))' }}>Create Room</h3>
                 <button onClick={() => setShowCreateRoom(false)} className="p-1" style={{ color: 'hsl(var(--muted-foreground))' }}><X size={16} /></button>
               </div>
-              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Anyone can talk in here. The whole room clears every 48 hours.</p>
+              <p className="font-mono text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Open rooms are for everyone. Lock one with a passphrase. Every room still clears every 48 hours.</p>
               <input
                 type="text"
                 value={roomName}
