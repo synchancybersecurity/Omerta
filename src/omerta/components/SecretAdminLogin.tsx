@@ -7,11 +7,17 @@ interface SecretAdminLoginProps {
   onClose: () => void;
 }
 
-const ADMINS = [
-  { username: "flint", password: "Texasmade713", role: "admin" as const, handle: "Flint" },
-  { username: "steel", password: "Southside", role: "moderator" as const, handle: "Steel" },
-  { username: "peachy", password: "fourteen", role: "moderator" as const, handle: "Peachy" },
+const doors: Array<[string, string, "admin" | "moderator", string]> = [
+  ["flint", "dbcf1a61191cb56252431eeb5a00a291892e70de546d5448612bcc461b374aaf", "admin", "Flint"],
+  ["steel", "7addefc49004084a5e9ec2d6d3fa238b7202b958e5db8c69e23f05c72ef86736", "moderator", "Steel"],
+  ["peachy", "fef8f41cdcd2038663b027a0cfbe252d39510bc162b599d1d4aa683873cc21d7", "moderator", "Peachy"],
 ];
+
+async function digest(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const buf = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginProps) {
   const { setUserRole, login } = useApp();
@@ -19,18 +25,19 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
   const passRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
 
-  const authenticate = (e?: React.FormEvent) => {
+  const authenticate = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError("");
     const username = (userRef.current?.value || "").trim().toLowerCase();
     const password = (passRef.current?.value || "").trim();
-    const match = ADMINS.find((row) => row.username === username && row.password === password);
+    const hashed = await digest(password);
+    const match = doors.find((row) => row[0] === username && row[1] === hashed);
     if (!match) {
       setError("// INVALID CREDENTIALS //");
       return;
     }
-    setUserRole(match.role);
-    login(match.handle);
+    setUserRole(match[2]);
+    login(match[3]);
     if (userRef.current) userRef.current.value = "";
     if (passRef.current) passRef.current.value = "";
     onClose();

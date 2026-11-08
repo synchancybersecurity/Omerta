@@ -13,41 +13,29 @@ export default function SecretAdminLogin({ isOpen, onClose }: SecretAdminLoginPr
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const name = username.trim().toLowerCase();
+    const bytes = new TextEncoder().encode(password.trim());
+    const buf = await crypto.subtle.digest('SHA-256', bytes);
+    const hashed = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
-    // Admin: Flint / Texasmade713
-    if (username === 'Flint' && password === 'Texasmade713') {
-      setUserRole('admin');
-      login('Flint');
-      setUsername('');
-      setPassword('');
-      onClose();
+    const doors: Array<[string, string, 'admin' | 'moderator', string]> = [
+      ['flint', 'dbcf1a61191cb56252431eeb5a00a291892e70de546d5448612bcc461b374aaf', 'admin', 'Flint'],
+      ['steel', '7addefc49004084a5e9ec2d6d3fa238b7202b958e5db8c69e23f05c72ef86736', 'moderator', 'Steel'],
+      ['peachy', 'fef8f41cdcd2038663b027a0cfbe252d39510bc162b599d1d4aa683873cc21d7', 'moderator', 'Peachy'],
+    ];
+    const match = doors.find((row) => row[0] === name && row[1] === hashed);
+    if (!match) {
+      setError('// INVALID CREDENTIALS //');
       return;
     }
-
-    // Moderator: Steel / Southside
-    if (username === 'Steel' && password === 'Southside') {
-      setUserRole('moderator');
-      login('Steel');
-      setUsername('');
-      setPassword('');
-      onClose();
-      return;
-    }
-
-    // Moderator: Peachy / fourteen
-    if (username === 'Peachy' && password === 'fourteen') {
-      setUserRole('moderator');
-      login('Peachy');
-      setUsername('');
-      setPassword('');
-      onClose();
-      return;
-    }
-
-    setError('// INVALID CREDENTIALS //');
+    setUserRole(match[2]);
+    login(match[3]);
+    setUsername('');
+    setPassword('');
+    onClose();
   };
 
   if (!isOpen) return null;
