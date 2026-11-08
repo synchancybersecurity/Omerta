@@ -22,7 +22,7 @@ Omertà is a private communications app for people who use a handle instead of a
 
 ## What you get
 
-Each person signs in with a handle and a passphrase. A new pair creates an account on that device. The same pair opens it again later. The handle is not case sensitive. The passphrase is.
+Each person signs in with a handle and a passphrase. A new pair creates an account on that device. The same pair opens it again later. The handle is not case sensitive, including when the app looks up a conversation, a private message, or an escrow. The passphrase is case sensitive.
 
 The interface is one dark room with a bottom bar. Sections stay available without a page reload. When a message, post, bid, or room changes, the open screen updates on its own. You do not have to leave and come back to see something new.
 
@@ -71,15 +71,21 @@ The house keeps 3 percent of every escrow, every bid, and every auction sale. A 
 
 Those fees are booked to a house wallet that the app creates on the phone. When a payer approves the transfer, the 3 percent is sent as USDC on Base or on Ethereum, whichever chain the house is using. The payer still has to approve it in their own wallet. Omertà does not hold anyone else's key, and it cannot pull coins out of a wallet that has not signed.
 
-An administrator can enter one or more payout addresses and export some or all of the USDC from the house wallet to an address they choose. The house wallet needs a little ETH on that chain to pay the network fee for the export. The recovery phrase for that wallet can be written down. After the app is wiped, an administrator enters the same phrase and the coins are reachable again, because the address is the same one.
+An administrator can enter one or more payout addresses and export some or all of the USDC from the house wallet to an address they choose. Leave the amount blank to export the whole balance. The house wallet needs a little ETH on that chain to pay the network fee for the export.
+
+## Recovery
+
+In House Escrow, an administrator can show the recovery phrase and write it down somewhere that is not the phone. After the app is wiped, sign in as an administrator and paste that phrase into Restore house wallet. The same address comes back, and the coins that were already on the chain can be exported again.
+
+The phrase does not bring back messages, posts, rooms, or files. Those live only in the vault on the phone where they were written. A wallet created before phrases existed shows a recovery key instead of twelve words. That key restores the same way.
 
 ## Security
 
 The browser vault is encrypted with AES 256 GCM before it is written to device storage. Someone reading the saved file sees ciphertext, not the messages, handles, or passphrases. Pictures, clips, and other files are sealed the same way and stored beside the vault, not inside one giant text file.
 
-The key that opens the vault stays on the same device. It is not published in this repository. Clearing the browser site data removes both the vault and the key. There is no recovery from another machine.
+The key that opens the message vault stays on the same device. It is not published in this repository, and the house recovery phrase does not open it. Clearing the browser site data removes the vault. There is no way to fetch those messages from another machine.
 
-The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one.
+The published site does not run a shared server. Two phones do not share one vault. A passphrase that exists only on another machine will not open this one. The house coins are the exception: they sit on the chain, and the recovery phrase can point a phone at that same wallet.
 
 ## Install
 

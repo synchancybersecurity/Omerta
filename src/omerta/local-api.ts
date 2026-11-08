@@ -424,6 +424,10 @@ function clearRoomsIfDue() {
   save();
 }
 
+function sameHandle(a: unknown, b: unknown) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -538,7 +542,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   if (seg[0] === "conversations" && seg.length === 1 && method === "GET") {
     const handle = q.get("handle") || "";
     const rows = db.conversations
-      .filter((c) => c.user1_handle === handle || c.user2_handle === handle)
+      .filter((c) => sameHandle(c.user1_handle, handle) || sameHandle(c.user2_handle, handle))
       .map((c) => {
         const msgs = db.messages.filter((m) => m.conversation_id === c.id).sort((a, b) => a.timestamp - b.timestamp);
         const last = msgs[msgs.length - 1];
@@ -629,7 +633,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   if (seg[0] === "sms" && seg.length === 1 && method === "GET") {
     const handle = q.get("handle") || "";
     const rows = db.smsMessages
-      .filter((m) => m.sender_handle === handle || m.recipient === handle)
+      .filter((m) => sameHandle(m.sender_handle, handle) || sameHandle(m.recipient, handle))
       .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
     return json(rows);
   }
@@ -704,6 +708,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const wallet = ensureHouseWallet();
     const to = String(body.to || "").trim();
     const amount = body.amount === undefined || body.amount === "" ? undefined : Number(body.amount);
+    if (amount !== undefined && !Number.isFinite(amount)) return json({ error: "Enter an amount" }, 400);
     try {
       const tx = await exportHouseUsdc(wallet.key, db.houseSettings.chain || "base", to, amount);
       save();
@@ -751,7 +756,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const handle = q.get("handle") || "";
     return json(
       db.escrows
-        .filter((e) => e.sender === handle || e.recipient === handle)
+        .filter((e) => sameHandle(e.sender, handle) || sameHandle(e.recipient, handle))
         .sort((a, b) => Number(b.created_at) - Number(a.created_at)),
     );
   }
@@ -759,6 +764,9 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
   if (seg[0] === "escrow" && seg.length === 1 && method === "POST") {
     const body = await readJson(input, init);
     const amount = Number(body.amount);
+    if (!body.sender || !body.recipient || !Number.isFinite(amount) || amount <= 0) {
+      return json({ error: "Enter a recipient and an amount" }, 400);
+    }
     const pct = 3;
     const houseFee = Number((amount * (pct / 100)).toFixed(2));
     const escrow = {
@@ -819,8 +827,8 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
     const handle = q.get("handle") || "";
     const query = (q.get("q") || "").toLowerCase();
     const results: Array<Record<string, unknown>> = [];
-    for (const conv of db.conversations.filter((c) => c.user1_handle === handle || c.user2_handle === handle)) {
-      const other = conv.user1_handle === handle ? conv.user2_handle : conv.user1_handle;
+    for (const conv of db.conversations.filter((c) => sameHandle(c.user1_handle, handle) || sameHandle(c.user2_handle, handle))) {
+      const other = sameHandle(conv.user1_handle, handle) ? conv.user2_handle : conv.user1_handle;
       for (const msg of db.messages.filter((m) => m.conversation_id === conv.id && m.content.toLowerCase().includes(query))) {
         results.push({ ...msg, other_handle: other });
       }
