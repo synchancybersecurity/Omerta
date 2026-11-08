@@ -57,6 +57,8 @@ Private messages and room messages appear as soon as they are sent. You do not h
 
 A post or a private message can carry a picture, a video, or another file. There is no size cap inside the app. The phone can still run out of space, and a very large clip can take a moment while it is sealed. Profile portraits are pictures you choose yourself. A picture or a clip in the vault does not travel to another phone. The writing does, when the message itself is public.
 
+Anyone can report a post from that post's menu. The report does not delete it. A moderator reviews open reports in Settings and can dismiss one or suspend the handle, when that privilege is on. An announcement is a news post from a moderator or an administrator, and only after announcements have been turned on.
+
 A private message is sealed end to end between the two handles before it is stored. Each handle has its own key, kept on that phone. What is saved is ciphertext. The sender and the other handle can both read it. Nobody else is given the text. A private text message is sealed the same way. This is not a switch. It is on for every private thread. Older private messages already on the phone are sealed the next time the app opens. If a new key is started later, the phone keeps the earlier keys and tries those too, so an older thread still opens.
 
 The lounge, unlocked rooms, and posts stay readable by everyone. That is the public board, and it is public on purpose.
@@ -69,15 +71,15 @@ From the message tab, a phone number opens the phone's own texting app. Omertà 
 
 ## The market
 
-MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. The category can be one of the desk's own, or a name the seller types. A photograph can be attached to the listing. The clock shows how much time is left.
+MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. The ready categories are Relics, Coin, Documents, Portraits, Jewelry, and Oddities. A seller can also type a category of their own, up to 40 characters. That name then appears as its own filter on the desk. A photograph can be attached to the listing. The clock shows how much time is left.
 
-Anyone may bid, buy the lot outright when buy now is offered, or watch it. A bid must beat the current price. A seller cannot bid on their own lot. When the clock ends, the high bid wins. If nobody bids, the lot simply ends.
+Anyone may bid, buy the lot outright when buy now is offered, or watch it. A bid must beat the current price. A seller cannot bid on their own lot. When the clock ends, the high bid wins. If nobody bids, the lot simply ends. The desk can be narrowed to live lots, lots ending within a day, buy now, lots you are watching, lots you are bidding on, or lots you are selling.
 
 ## The public board
 
 The lounge, unlocked rooms, posts, and auctions are shared. A phone publishes that public board and reads what other phones have published, so everyone sees the same open chats and the same lots. It catches up about every eight seconds.
 
-A locked room can be seen by name. Its messages stay on the phone where they were written. A private message stays between the two handles and is not published. Passphrases, the house wallet, and the recovery phrase are not published either. A picture or a clip kept in the vault does not travel with the board. The text does.
+A locked room can be seen by name. Its messages are sealed with the room passphrase and stay on the phone where they were written. A private message stays between the two handles and is not published. Passphrases, the house wallet, and the recovery phrase are not published either. A picture or a clip kept in the vault does not travel with the board. The text does.
 
 ## Escrow and the house
 
@@ -144,7 +146,7 @@ Omertà can be added to a phone home screen.
 | iPhone | Open the link in Safari. Tap Share, then Add to Home Screen. |
 | Android | Open the link in Chrome. Use the browser menu, then Add to Home screen or Install app. |
 
-The icon is the coin. The name is Omertà. After an update, close the app completely and open it again.
+The icon is the coin. The name is Omertà. After an update, close the app completely and open it again. If the home screen icon still shows an old copy, delete that icon, open the link in the browser, and add it to the home screen once more. The old icon does not pick up a new copy by itself.
 
 ## Accounts
 
