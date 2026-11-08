@@ -24,13 +24,9 @@ export default function LoginScreen() {
     setShowInstallHint(!standalone);
   }, []);
 
-  const { rotation, wasActivated, handlers } = useCoinDrag({
+  const { rotation, wasActivated, ref: coinRef } = useCoinDrag({
     holdMs: 5000,
-    onActivate: () => {
-      // Coin is now glowing red and flippable
-    },
     onComboComplete: () => {
-      // Correct flip sequence completed - show secret admin login
       setShowSecretLogin(true);
     },
   });
@@ -90,22 +86,26 @@ export default function LoginScreen() {
       <div className="w-full max-w-md px-6 py-10">
         <div className="rounded-xl px-8 py-10" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
           {/* Logo — tap and hold for 5s, then coin flips and glows red */}
-          <div className={`flex justify-center mb-6 relative transition-all duration-700 ${showLogin ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`} style={{ perspective: '400px' }}>
+          <div className={`flex justify-center mb-6 relative transition-all duration-700 ${showLogin ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`} style={{ perspective: "900px" }}>
             <img
+              ref={coinRef}
               src="/logo.jpg"
               alt="Omerta"
               draggable={false}
-              className="w-36 h-36 md:w-44 md:h-44 object-contain select-none touch-none rounded-full"
+              className="w-36 h-36 md:w-44 md:h-44 object-contain select-none rounded-full"
               style={{
-                transformStyle: 'preserve-3d',
+                transformStyle: "preserve-3d",
                 transform: `rotateX(${rotation}deg)`,
+                transition: wasActivated ? "filter 0.35s ease" : undefined,
+                touchAction: "none",
+                WebkitTouchCallout: "none",
+                WebkitUserSelect: "none",
+                userSelect: "none",
                 filter: wasActivated
-                  ? 'drop-shadow(0 0 12px rgba(185,28,28,0.9)) drop-shadow(0 0 30px rgba(185,28,28,0.6)) drop-shadow(0 0 50px rgba(185,28,28,0.3))'
-                  : 'drop-shadow(0 0 8px rgba(255,255,255,0.1))',
+                  ? "drop-shadow(0 0 10px rgba(185,28,28,1)) drop-shadow(0 0 28px rgba(185,28,28,0.85)) drop-shadow(0 0 48px rgba(185,28,28,0.45))"
+                  : "drop-shadow(0 0 8px rgba(255,255,255,0.1))",
               }}
-              {...handlers}
             />
-
           </div>
 
           <div className="text-center mb-10">
