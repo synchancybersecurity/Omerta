@@ -87,6 +87,7 @@ export default function MrktTab() {
     title: "",
     description: "",
     category: "Relics",
+    customCategory: "",
     start_price: "",
     buy_now: "",
     days: "3",
@@ -117,10 +118,15 @@ export default function MrktTab() {
   const open = lots.find((lot) => lot.id === openId) || null;
   const me = userHandle.trim().toLowerCase();
 
+  const chips = useMemo(() => {
+    const known = new Set(CATEGORIES.map((item) => item.toLowerCase()));
+    const extra = [...new Set(lots.map((lot) => lot.category.trim()).filter((item) => item && !known.has(item.toLowerCase())))];
+    return [...CATEGORIES, ...extra];
+  }, [lots]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return lots
-      .filter((lot) => category === "All" || lot.category === category)
+      .filter((lot) => category === "All" || lot.category.trim().toLowerCase() === category.trim().toLowerCase())
       .filter((lot) => !q || lot.title.toLowerCase().includes(q) || lot.seller.toLowerCase().includes(q))
       .filter((lot) => {
         if (desk === "Live") return lot.status === "live";
@@ -232,7 +238,7 @@ export default function MrktTab() {
         seller: userHandle,
         title: form.title,
         description: form.description,
-        category: form.category,
+        category: (form.customCategory.trim() || form.category).slice(0, 40),
         start_price: Number(form.start_price),
         buy_now: form.buy_now.trim() ? Number(form.buy_now) : null,
         days: Number(form.days),
@@ -246,7 +252,7 @@ export default function MrktTab() {
       return;
     }
     setSelling(false);
-    setForm({ title: "", description: "", category: "Relics", start_price: "", buy_now: "", days: "3", image: null });
+    setForm({ title: "", description: "", category: "Relics", customCategory: "", start_price: "", buy_now: "", days: "3", image: null });
     setOpenId(data.id);
     await load();
   };
@@ -300,7 +306,7 @@ export default function MrktTab() {
       {!open && !selling && (
         <>
           <div className="flex gap-2 overflow-x-auto px-4 py-3">
-            {CATEGORIES.map((item) => (
+            {chips.map((item) => (
               <button key={item} type="button" onClick={() => setCategory(item)} className="shrink-0 px-3 py-1 rounded-full font-mono text-[10px] uppercase tracking-wider border" style={{ borderColor: category === item ? "hsl(var(--primary))" : "hsl(var(--border))", color: category === item ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>{item}</button>
             ))}
           </div>
@@ -386,6 +392,7 @@ export default function MrktTab() {
           <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full rounded-sm px-3 py-2 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }}>
             {CATEGORIES.filter((item) => item !== "All").map((item) => <option key={item}>{item}</option>)}
           </select>
+          <input value={form.customCategory} onChange={(e) => setForm({ ...form, customCategory: e.target.value })} maxLength={40} placeholder="Or type your own category" className="w-full rounded-sm px-3 py-2 font-mono text-sm border" style={{ background: "hsl(var(--input))", borderColor: form.customCategory.trim() ? "hsl(var(--primary))" : "hsl(var(--border))", color: "hsl(var(--foreground))" }} />
           <Field label="Opening price in BTC" value={form.start_price} onChange={(start_price) => setForm({ ...form, start_price })} numeric />
           {Number(form.start_price) > 0 && <p className="font-mono text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>{money(Number(form.start_price), price)}</p>}
           <Field label="Buy now in BTC, optional" value={form.buy_now} onChange={(buy_now) => setForm({ ...form, buy_now })} numeric />

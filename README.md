@@ -69,7 +69,7 @@ From the message tab, a phone number opens the phone's own texting app. Omertà 
 
 ## The market
 
-MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. A photograph can be attached to the listing. The clock shows how much time is left.
+MRKT is an auction desk priced in bitcoin. A seller lists a lot with a title, a description, a category, an opening price in bitcoin, and an optional buy now price. The category can be one of the desk's own, or a name the seller types. A photograph can be attached to the listing. The clock shows how much time is left.
 
 Anyone may bid, buy the lot outright when buy now is offered, or watch it. A bid must beat the current price. A seller cannot bid on their own lot. When the clock ends, the high bid wins. If nobody bids, the lot simply ends.
 

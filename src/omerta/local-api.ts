@@ -1863,7 +1863,7 @@ async function route(path: string, method: string, input: RequestInfo | URL, ini
       seller,
       title: title.slice(0, 80),
       description: String(body.description || "").trim().slice(0, 800),
-      category: String(body.category || "Oddities"),
+      category: String(body.category || "Oddities").trim().slice(0, 40) || "Oddities",
       image: typeof body.image === "string" && (body.image.startsWith("data:image/") || body.image.startsWith("vault:")) ? body.image : null,
       start_price: sats(start),
       buy_now: buyNow === null ? null : sats(buyNow),
