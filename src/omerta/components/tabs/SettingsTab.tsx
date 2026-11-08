@@ -485,6 +485,7 @@ function DataWipe() {
   const [days, setDays] = useState(1);
   const [wipeAt, setWipeAt] = useState(0);
   const [notice, setNotice] = useState("");
+  const [confirmDays, setConfirmDays] = useState<number | null>(null);
 
   useEffect(() => {
     if (!userHandle) return;
@@ -518,7 +519,7 @@ function DataWipe() {
           <h3 className="font-mono text-sm" style={{ color: "hsl(var(--foreground))" }}>Dead man's switch</h3>
           <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>Turn this on and choose 1 to 7 days. When the time is up, your messages, posts, auctions, and the rest of your stored info are deleted. Your handle stays.</p>
         </div>
-        <button type="button" onClick={() => void save(!enabled, days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
+        <button type="button" onClick={() => enabled ? void save(false, days) : setConfirmDays(days)} className="px-3 py-1.5 rounded-sm font-mono text-[10px] uppercase border" style={{ borderColor: enabled ? "hsl(var(--primary))" : "hsl(var(--border))", color: enabled ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}>
           {enabled ? "On" : "Off"}
         </button>
       </div>
@@ -529,6 +530,20 @@ function DataWipe() {
       </div>
       {enabled && wipeAt > 0 && <p className="font-mono text-[10px] mt-2" style={{ color: "hsl(var(--primary))" }}>Fires {new Date(wipeAt).toLocaleString()}.</p>}
       {notice && <p className="font-mono text-[10px] mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>{notice}</p>}
+      {confirmDays !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.78)" }}>
+          <div className="w-full max-w-sm border rounded-lg p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--primary))" }}>
+            <h3 className="font-serif text-2xl" style={{ color: "hsl(var(--foreground))" }}>Arm it?</h3>
+            <p className="font-mono text-[11px] mt-2" style={{ color: "hsl(var(--muted-foreground))" }}>
+              In {confirmDays} {confirmDays === 1 ? "day" : "days"}, your messages, posts, auctions, and the rest of your stored info will be deleted. Your handle stays.
+            </p>
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={() => setConfirmDays(null)} className="flex-1 py-2 rounded-sm font-mono text-[10px] uppercase border" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }}>Cancel</button>
+              <button type="button" onClick={() => { const next = confirmDays; setConfirmDays(null); void save(true, next); }} className="flex-1 py-2 rounded-sm font-mono text-[10px] uppercase" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>Arm it</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

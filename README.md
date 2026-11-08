@@ -107,7 +107,7 @@ The public board is the exception. Open chats, unlocked rooms, posts, and auctio
 
 ## Dead man's switch
 
-In Settings, every handle can turn on the dead man's switch. Choose 1 to 7 days. When that time is up, the app deletes that handle's messages, posts, auctions, bids, rooms they created, and the rest of their stored info. The handle and passphrase stay, so they can sign in again. If the switch is still on, it arms again for the same number of days. Turning it off cancels the countdown. Nothing is deleted when you turn it off.
+In Settings, every handle can turn on the dead man's switch. Turning it on asks for confirmation first. Choose 1 to 7 days. When that time is up, the app deletes that handle's messages, posts, auctions, bids, rooms they created, and the rest of their stored info. The handle and passphrase stay, so they can sign in again. If the switch is still on, it arms again for the same number of days. Turning it off cancels the countdown. Nothing is deleted when you turn it off.
 
 Public posts and auctions removed by the switch are dropped on other phones too. Private messages are removed on the phone where they were stored.
 
